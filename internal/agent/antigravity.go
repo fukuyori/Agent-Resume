@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"agent-hub/internal/session"
+	"agres/internal/session"
 )
 
 type AntigravityDetector struct{}
@@ -46,9 +46,13 @@ func (d *AntigravityDetector) Detect(cwd string) bool {
 		return false
 	}
 
-	absCwd, _ := filepath.Abs(cwd)
-	_, ok := mappings[absCwd]
-	return ok
+	normCwd := normalizePath(cwd)
+	for wsPath := range mappings {
+		if normalizePath(wsPath) == normCwd {
+			return true
+		}
+	}
+	return false
 }
 
 func (d *AntigravityDetector) ListSessions(cwd string) ([]session.Session, error) {
@@ -64,11 +68,11 @@ func (d *AntigravityDetector) ListSessions(cwd string) ([]session.Session, error
 		return nil, err
 	}
 
-	absCwd, _ := filepath.Abs(cwd)
+	normCwd := normalizePath(cwd)
 	var sessions []session.Session
 
 	for wsPath, uuid := range mappings {
-		if wsPath != absCwd {
+		if normalizePath(wsPath) != normCwd {
 			continue
 		}
 

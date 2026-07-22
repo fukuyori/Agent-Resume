@@ -5,7 +5,7 @@ import (
 	"io"
 	"strings"
 
-	"agent-hub/internal/session"
+	"agres/internal/session"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"

@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"agent-hub/internal/session"
+	"agres/internal/session"
 )
 
 type CodexDetector struct{}
@@ -33,6 +33,7 @@ func (d *CodexDetector) Detect(cwd string) bool {
 	}
 	defer f.Close()
 
+	normCwd := normalizePath(cwd)
 	scanner := bufio.NewScanner(f)
 	scanner.Buffer(make([]byte, 0, 1024*1024), 1024*1024)
 
@@ -50,9 +51,7 @@ func (d *CodexDetector) Detect(cwd string) bool {
 		if entry.Cwd == "" {
 			continue
 		}
-		entryCwd, _ := filepath.Abs(entry.Cwd)
-		absCwd, _ := filepath.Abs(cwd)
-		if entryCwd == absCwd {
+		if normalizePath(entry.Cwd) == normCwd {
 			return true
 		}
 	}
@@ -66,7 +65,7 @@ func (d *CodexDetector) ListSessions(cwd string) ([]session.Session, error) {
 	}
 	defer f.Close()
 
-	absCwd, _ := filepath.Abs(cwd)
+	normCwd := normalizePath(cwd)
 	var sessions []session.Session
 
 	scanner := bufio.NewScanner(f)
@@ -89,8 +88,7 @@ func (d *CodexDetector) ListSessions(cwd string) ([]session.Session, error) {
 		}
 
 		if entry.Cwd != "" {
-			entryCwd, _ := filepath.Abs(entry.Cwd)
-			if entryCwd != absCwd {
+			if normalizePath(entry.Cwd) != normCwd {
 				continue
 			}
 		}

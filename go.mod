@@ -1,4 +1,4 @@
-module agent-hub
+module agres
 
 go 1.26.4
 

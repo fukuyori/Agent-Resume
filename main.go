@@ -7,12 +7,12 @@ import (
 	"sort"
 	"sync"
 
-	"agent-hub/internal/agent"
-	"agent-hub/internal/session"
-	"agent-hub/internal/tui"
+	"agres/internal/agent"
+	"agres/internal/session"
+	"agres/internal/tui"
 )
 
-var version = "0.1.0"
+var version = "0.2.0"
 
 func main() {
 	cwd, err := os.Getwd()
@@ -66,7 +66,7 @@ func main() {
 
 	if len(allSessions) == 0 {
 		fmt.Printf("No agent sessions found in: %s\n", cwd)
-		fmt.Println("Run agresume from a project directory that has agent sessions.")
+		fmt.Println("Run agres from a project directory that has agent sessions.")
 		os.Exit(0)
 	}
 
@@ -84,7 +84,12 @@ func main() {
 		os.Exit(0)
 	}
 
-	cmd := exec.Command(selected.ResumeCmd[0], selected.ResumeCmd[1:]...)
+	execPath, err := exec.LookPath(selected.ResumeCmd[0])
+	if err != nil {
+		execPath = selected.ResumeCmd[0]
+	}
+
+	cmd := exec.Command(execPath, selected.ResumeCmd[1:]...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

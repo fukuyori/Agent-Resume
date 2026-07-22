@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"agent-hub/internal/session"
+	"agres/internal/session"
 )
 
 type ClaudeDetector struct{}
@@ -29,7 +29,9 @@ func (d *ClaudeDetector) projectSlug(cwd string) string {
 	if err != nil {
 		return ""
 	}
-	slug := strings.ReplaceAll(abs, "/", "-")
+	slashed := filepath.ToSlash(abs)
+	slug := strings.ReplaceAll(slashed, "/", "-")
+	slug = strings.ReplaceAll(slug, ":", "-")
 	return slug
 }
 
@@ -37,19 +39,40 @@ func (d *ClaudeDetector) projectsDir() string {
 	return filepath.Join(d.homeDir(), ".claude", "projects")
 }
 
-func (d *ClaudeDetector) Detect(cwd string) bool {
-	slug := d.projectSlug(cwd)
-	if slug == "" {
-		return false
+func (d *ClaudeDetector) findProjectDir(cwd string) string {
+	abs, err := filepath.Abs(cwd)
+	if err != nil {
+		return ""
 	}
-	dir := filepath.Join(d.projectsDir(), slug)
-	info, err := os.Stat(dir)
-	return err == nil && info.IsDir()
+	slashed := filepath.ToSlash(abs)
+	
+	// Candidate slugs
+	candidates := []string{
+		strings.ReplaceAll(strings.ReplaceAll(slashed, "/", "-"), ":", "-"),
+		strings.ReplaceAll(strings.ReplaceAll(abs, "\\", "-"), ":", "-"),
+		strings.ReplaceAll(slashed, "/", "-"),
+	}
+
+	pDir := d.projectsDir()
+	for _, c := range candidates {
+		dir := filepath.Join(pDir, c)
+		if info, err := os.Stat(dir); err == nil && info.IsDir() {
+			return dir
+		}
+	}
+	return ""
+}
+
+func (d *ClaudeDetector) Detect(cwd string) bool {
+	dir := d.findProjectDir(cwd)
+	return dir != ""
 }
 
 func (d *ClaudeDetector) ListSessions(cwd string) ([]session.Session, error) {
-	slug := d.projectSlug(cwd)
-	dir := filepath.Join(d.projectsDir(), slug)
+	dir := d.findProjectDir(cwd)
+	if dir == "" {
+		return nil, nil
+	}
 
 	entries, err := os.ReadDir(dir)
 	if err != nil {

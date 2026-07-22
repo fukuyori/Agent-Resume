@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"agent-hub/internal/session"
+	"agres/internal/session"
 
 	_ "modernc.org/sqlite"
 )
@@ -45,20 +45,29 @@ func (d *OpenCodeDetector) Detect(cwd string) bool {
 }
 
 func (d *OpenCodeDetector) findProjectID(db *sql.DB, cwd string) string {
-	absCwd, _ := filepath.Abs(cwd)
+	normCwd := normalizePath(cwd)
 
-	var projectID string
-	err := db.QueryRow(`SELECT id FROM project WHERE worktree = ?`, absCwd).Scan(&projectID)
-	if err == nil {
-		return projectID
+	rows, err := db.Query(`SELECT id, worktree FROM project`)
+	if err != nil {
+		return ""
+	}
+	defer rows.Close()
+
+	var fallbackID string
+	for rows.Next() {
+		var id, worktree string
+		if err := rows.Scan(&id, &worktree); err != nil {
+			continue
+		}
+		if worktree == "/" && fallbackID == "" {
+			fallbackID = id
+		}
+		if normalizePath(worktree) == normCwd {
+			return id
+		}
 	}
 
-	err = db.QueryRow(`SELECT id FROM project WHERE worktree = '/'`).Scan(&projectID)
-	if err == nil {
-		return projectID
-	}
-
-	return ""
+	return fallbackID
 }
 
 func (d *OpenCodeDetector) ListSessions(cwd string) ([]session.Session, error) {

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"agent-hub/internal/session"
+	"agres/internal/session"
 )
 
 type AiderDetector struct{}
