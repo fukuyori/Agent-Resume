@@ -47,19 +47,35 @@ func (d *ClaudeDetector) findProjectDir(cwd string) string {
 	slashed := filepath.ToSlash(abs)
 	
 	// Candidate slugs
-	candidates := []string{
+	candidateSlugs := []string{
 		strings.ReplaceAll(strings.ReplaceAll(slashed, "/", "-"), ":", "-"),
 		strings.ReplaceAll(strings.ReplaceAll(abs, "\\", "-"), ":", "-"),
 		strings.ReplaceAll(slashed, "/", "-"),
 	}
 
 	pDir := d.projectsDir()
-	for _, c := range candidates {
+	for _, c := range candidateSlugs {
 		dir := filepath.Join(pDir, c)
 		if info, err := os.Stat(dir); err == nil && info.IsDir() {
 			return dir
 		}
 	}
+
+	// Case-insensitive directory matching fallback
+	entries, err := os.ReadDir(pDir)
+	if err == nil {
+		for _, e := range entries {
+			if !e.IsDir() {
+				continue
+			}
+			for _, c := range candidateSlugs {
+				if strings.EqualFold(e.Name(), c) {
+					return filepath.Join(pDir, e.Name())
+				}
+			}
+		}
+	}
+
 	return ""
 }
 
@@ -103,10 +119,15 @@ func (d *ClaudeDetector) parseSessionFile(path string) (*session.Session, error)
 	stat, _ := f.Stat()
 	sessionID := strings.TrimSuffix(filepath.Base(path), ".jsonl")
 
+	var modTime time.Time
+	if stat != nil {
+		modTime = stat.ModTime()
+	}
+
 	s := &session.Session{
 		ID:        sessionID,
 		Agent:     session.AgentClaude,
-		UpdatedAt: stat.ModTime(),
+		UpdatedAt: modTime,
 		ResumeCmd: []string{"claude", "--resume", sessionID},
 	}
 
@@ -120,12 +141,13 @@ func (d *ClaudeDetector) parseSessionFile(path string) (*session.Session, error)
 		}
 
 		var msg struct {
-			Type      string `json:"type"`
-			Content   string `json:"content"`
-			Timestamp string `json:"timestamp"`
+			Type      string          `json:"type"`
+			Content   json.RawMessage `json:"content"`
+			Timestamp string          `json:"timestamp"`
 			Message   struct {
-				Role    string `json:"role"`
-				Content string `json:"content"`
+				Role    string          `json:"role"`
+				Content json.RawMessage `json:"content"`
+				Model   string          `json:"model"`
 			} `json:"message"`
 			Model string `json:"model"`
 		}
@@ -134,7 +156,7 @@ func (d *ClaudeDetector) parseSessionFile(path string) (*session.Session, error)
 		}
 
 		if msg.Timestamp != "" {
-			if t, err := time.Parse(time.RFC3339, msg.Timestamp); err == nil {
+			if t, err := parseTimestamp(msg.Timestamp); err == nil {
 				if s.CreatedAt.IsZero() || t.Before(s.CreatedAt) {
 					s.CreatedAt = t
 				}
@@ -147,19 +169,32 @@ func (d *ClaudeDetector) parseSessionFile(path string) (*session.Session, error)
 		if s.Title == "" {
 			switch msg.Type {
 			case "queue-operation":
-				if content := truncate(cleanContent(msg.Content), 50); content != "" {
+				c := extractRawContent(msg.Content)
+				if content := truncate(cleanContent(c), 50); content != "" {
 					s.Title = content
 				}
 			case "user":
-				if content := truncate(cleanContent(msg.Message.Content), 50); content != "" {
+				c := extractRawContent(msg.Message.Content)
+				if content := truncate(cleanContent(c), 50); content != "" {
 					s.Title = content
 				}
 			}
 		}
 
-		if msg.Model != "" && s.Model == "" {
-			s.Model = msg.Model
+		if s.Model == "" {
+			if msg.Model != "" {
+				s.Model = msg.Model
+			} else if msg.Message.Model != "" {
+				s.Model = msg.Message.Model
+			}
 		}
+	}
+
+	if s.UpdatedAt.IsZero() {
+		s.UpdatedAt = modTime
+	}
+	if s.CreatedAt.IsZero() {
+		s.CreatedAt = s.UpdatedAt
 	}
 
 	if s.Title == "" {
@@ -167,6 +202,47 @@ func (d *ClaudeDetector) parseSessionFile(path string) (*session.Session, error)
 	}
 
 	return s, nil
+}
+
+func parseTimestamp(ts string) (time.Time, error) {
+	if t, err := time.Parse(time.RFC3339Nano, ts); err == nil {
+		return t, nil
+	}
+	return time.Parse(time.RFC3339, ts)
+}
+
+func extractRawContent(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var strVal string
+	if err := json.Unmarshal(raw, &strVal); err == nil {
+		return strVal
+	}
+
+	var arrVal []json.RawMessage
+	if err := json.Unmarshal(raw, &arrVal); err == nil {
+		var parts []string
+		for _, item := range arrVal {
+			var block struct {
+				Type    string `json:"type"`
+				Text    string `json:"text"`
+				Content string `json:"content"`
+			}
+			if err := json.Unmarshal(item, &block); err == nil {
+				if block.Type == "text" && block.Text != "" {
+					parts = append(parts, block.Text)
+				} else if block.Text != "" {
+					parts = append(parts, block.Text)
+				} else if block.Content != "" {
+					parts = append(parts, block.Content)
+				}
+			}
+		}
+		return strings.Join(parts, " ")
+	}
+
+	return ""
 }
 
 var jsonlCleaner = regexp.MustCompile(`\{"type":"[^"]*"[^}]*\}`)

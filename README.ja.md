@@ -31,12 +31,17 @@ go build -o agres .
 ```bash
 cd /path/to/your/project
 agres
+
+# 履歴の表示件数を指定 (デフォルト: 10)
+agres 20
+agres -n 20
+agres --limit 20
 ```
 
 矢印キーまたは `j`/`k` で選択、`Enter` で確定、`q` または `Esc` で終了。
 
 ```
-  agres 0.2.0
+  agres 0.2.1
 
  > [opencode]  ログインバグ修正              2026-07-22 06:30:00  opencode
    [claude]    認証モジュールリファクタ      2026-07-21 22:15:00  claude
@@ -50,7 +55,7 @@ agres
 
 ```bash
 agres --version
-# agres 0.2.0
+# agres 0.2.1
 ```
 
 ## ライセンス

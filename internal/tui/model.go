@@ -147,7 +147,7 @@ func (m Model) View() string {
 
 	for i, s := range m.sessions {
 		label := agentLabels[s.Agent]
-		dateStr := s.UpdatedAt.Format("2006-01-02 15:04:05")
+		dateStr := s.UpdatedAt.Local().Format("2006-01-02 15:04:05")
 
 		agentLabel := agentStyle.Render(fmt.Sprintf("[%s]", label))
 		title := s.Title
