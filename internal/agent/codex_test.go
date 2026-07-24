@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -63,5 +64,63 @@ func TestCodexDetectorRealDirectory(t *testing.T) {
 	t.Logf("Found %d codex sessions for cwd %s", len(sessions), cwd)
 	for i, s := range sessions {
 		t.Logf("Session %d: ID=%s Title=%s CreatedAt=%v UpdatedAt=%v Model=%s", i, s.ID, s.Title, s.CreatedAt, s.UpdatedAt, s.Model)
+	}
+}
+
+func TestCodexIndexRequiresMatchingCwd(t *testing.T) {
+	root := t.TempDir()
+	cwd := filepath.Join(root, "project")
+	if err := os.Mkdir(cwd, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	indexPath := filepath.Join(root, "session_index.jsonl")
+	entries := []map[string]string{
+		{
+			"id":          "missing-cwd",
+			"thread_name": "must not leak",
+			"updated_at":  "2026-07-24T00:00:00Z",
+		},
+		{
+			"id":          "matching-cwd",
+			"thread_name": "matching session",
+			"updated_at":  "2026-07-24T00:00:00Z",
+			"cwd":         cwd,
+		},
+		{
+			"id":          "foreign-cwd",
+			"thread_name": "foreign session",
+			"updated_at":  "2026-07-24T00:00:00Z",
+			"cwd":         filepath.Join(root, "other"),
+		},
+	}
+
+	f, err := os.Create(indexPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		line, err := json.Marshal(entry)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := f.Write(append(line, '\n')); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	d := &CodexDetector{dir: root}
+	sessions, err := d.ListSessions(cwd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sessions) != 1 {
+		t.Fatalf("ListSessions returned %d sessions; want 1: %#v", len(sessions), sessions)
+	}
+	if sessions[0].ID != "matching-cwd" {
+		t.Fatalf("ListSessions returned session %q; want matching-cwd", sessions[0].ID)
 	}
 }

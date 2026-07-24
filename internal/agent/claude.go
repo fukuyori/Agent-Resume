@@ -15,7 +15,7 @@ import (
 type ClaudeDetector struct{}
 
 func (d *ClaudeDetector) Name() session.Agent { return session.AgentClaude }
-func (d *ClaudeDetector) Icon() string         { return "claude" }
+func (d *ClaudeDetector) Icon() string        { return "claude" }
 
 func (d *ClaudeDetector) homeDir() string {
 	if h, err := os.UserHomeDir(); err == nil {
@@ -45,7 +45,7 @@ func (d *ClaudeDetector) findProjectDir(cwd string) string {
 		return ""
 	}
 	slashed := filepath.ToSlash(abs)
-	
+
 	// Candidate slugs
 	candidateSlugs := []string{
 		strings.ReplaceAll(strings.ReplaceAll(slashed, "/", "-"), ":", "-"),
@@ -100,8 +100,8 @@ func (d *ClaudeDetector) ListSessions(cwd string) ([]session.Session, error) {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".jsonl") {
 			continue
 		}
-		s, err := d.parseSessionFile(filepath.Join(dir, e.Name()))
-		if err != nil {
+		s, err := d.parseSessionFile(filepath.Join(dir, e.Name()), cwd)
+		if err != nil || s == nil {
 			continue
 		}
 		sessions = append(sessions, *s)
@@ -109,7 +109,7 @@ func (d *ClaudeDetector) ListSessions(cwd string) ([]session.Session, error) {
 	return sessions, nil
 }
 
-func (d *ClaudeDetector) parseSessionFile(path string) (*session.Session, error) {
+func (d *ClaudeDetector) parseSessionFile(path, cwd string) (*session.Session, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
@@ -133,6 +133,7 @@ func (d *ClaudeDetector) parseSessionFile(path string) (*session.Session, error)
 
 	scanner := bufio.NewScanner(f)
 	scanner.Buffer(make([]byte, 0, 1024*1024), 1024*1024)
+	matchedCwd := false
 
 	for scanner.Scan() {
 		line := scanner.Bytes()
@@ -150,6 +151,7 @@ func (d *ClaudeDetector) parseSessionFile(path string) (*session.Session, error)
 				Model   string          `json:"model"`
 			} `json:"message"`
 			Model string `json:"model"`
+			Cwd   string `json:"cwd"`
 		}
 		if err := json.Unmarshal(line, &msg); err != nil {
 			continue
@@ -164,6 +166,10 @@ func (d *ClaudeDetector) parseSessionFile(path string) (*session.Session, error)
 					s.UpdatedAt = t
 				}
 			}
+		}
+
+		if samePath(msg.Cwd, cwd) {
+			matchedCwd = true
 		}
 
 		if s.Title == "" {
@@ -199,6 +205,10 @@ func (d *ClaudeDetector) parseSessionFile(path string) (*session.Session, error)
 
 	if s.Title == "" {
 		s.Title = "Untitled session"
+	}
+
+	if !matchedCwd {
+		return nil, nil
 	}
 
 	return s, nil

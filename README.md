@@ -41,7 +41,7 @@ agres --limit 20
 Use arrow keys or `j`/`k` to navigate, `Enter` to select, `q` or `Esc` to quit.
 
 ```
-  agres 0.2.1
+  agres 0.3.0
 
  > [opencode]  Fix login bug                2026-07-22 06:30:00  opencode
    [claude]    Refactor auth module         2026-07-21 22:15:00  claude
@@ -55,7 +55,7 @@ Use arrow keys or `j`/`k` to navigate, `Enter` to select, `q` or `Esc` to quit.
 
 ```bash
 agres --version
-# agres 0.2.1
+# agres 0.3.0
 ```
 
 ## License

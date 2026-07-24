@@ -41,7 +41,7 @@ agres --limit 20
 矢印キーまたは `j`/`k` で選択、`Enter` で確定、`q` または `Esc` で終了。
 
 ```
-  agres 0.2.1
+  agres 0.3.0
 
  > [opencode]  ログインバグ修正              2026-07-22 06:30:00  opencode
    [claude]    認証モジュールリファクタ      2026-07-21 22:15:00  claude
@@ -55,7 +55,7 @@ agres --limit 20
 
 ```bash
 agres --version
-# agres 0.2.1
+# agres 0.3.0
 ```
 
 ## ライセンス

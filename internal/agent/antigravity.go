@@ -15,7 +15,7 @@ import (
 type AntigravityDetector struct{}
 
 func (d *AntigravityDetector) Name() session.Agent { return session.AgentAntigravity }
-func (d *AntigravityDetector) Icon() string         { return "agy" }
+func (d *AntigravityDetector) Icon() string        { return "agy" }
 
 func (d *AntigravityDetector) baseDir() string {
 	home, err := os.UserHomeDir()
@@ -46,9 +46,8 @@ func (d *AntigravityDetector) Detect(cwd string) bool {
 		return false
 	}
 
-	normCwd := normalizePath(cwd)
 	for wsPath := range mappings {
-		if normalizePath(wsPath) == normCwd {
+		if samePath(wsPath, cwd) {
 			return true
 		}
 	}
@@ -56,7 +55,6 @@ func (d *AntigravityDetector) Detect(cwd string) bool {
 }
 
 func (d *AntigravityDetector) ListSessions(cwd string) ([]session.Session, error) {
-	normCwd := normalizePath(cwd)
 	sessionMap := make(map[string]*session.Session)
 
 	// 1. Read metadata cache if available
@@ -79,9 +77,7 @@ func (d *AntigravityDetector) ListSessions(cwd string) ([]session.Session, error
 			for uuid, c := range meta.Conversations {
 				matched := false
 				for _, uri := range c.Summary.WorkspaceURIs {
-					cleanURI := strings.TrimPrefix(uri, "file:///")
-					cleanURI = strings.TrimPrefix(cleanURI, "file://")
-					if normalizePath(cleanURI) == normCwd {
+					if samePath(fileURIPath(uri), cwd) {
 						matched = true
 						break
 					}
@@ -126,7 +122,7 @@ func (d *AntigravityDetector) ListSessions(cwd string) ([]session.Session, error
 		var mappings map[string]string
 		if err := json.NewDecoder(f).Decode(&mappings); err == nil {
 			for wsPath, uuid := range mappings {
-				if normalizePath(wsPath) == normCwd {
+				if samePath(wsPath, cwd) {
 					if _, exists := sessionMap[uuid]; !exists {
 						sessionMap[uuid] = &session.Session{
 							ID:        uuid,

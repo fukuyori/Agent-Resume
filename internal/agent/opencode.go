@@ -12,12 +12,17 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-type OpenCodeDetector struct{}
+type OpenCodeDetector struct {
+	dir string
+}
 
 func (d *OpenCodeDetector) Name() session.Agent { return session.AgentOpenCode }
-func (d *OpenCodeDetector) Icon() string         { return "opencode" }
+func (d *OpenCodeDetector) Icon() string        { return "opencode" }
 
 func (d *OpenCodeDetector) dataDir() string {
+	if d.dir != "" {
+		return d.dir
+	}
 	if v := os.Getenv("OPENCODE_DATA_DIR"); v != "" {
 		return v
 	}
@@ -44,32 +49,6 @@ func (d *OpenCodeDetector) Detect(cwd string) bool {
 	return err == nil && count > 0
 }
 
-func (d *OpenCodeDetector) findProjectID(db *sql.DB, cwd string) string {
-	normCwd := normalizePath(cwd)
-
-	rows, err := db.Query(`SELECT id, worktree FROM project`)
-	if err != nil {
-		return ""
-	}
-	defer rows.Close()
-
-	var fallbackID string
-	for rows.Next() {
-		var id, worktree string
-		if err := rows.Scan(&id, &worktree); err != nil {
-			continue
-		}
-		if worktree == "/" && fallbackID == "" {
-			fallbackID = id
-		}
-		if normalizePath(worktree) == normCwd {
-			return id
-		}
-	}
-
-	return fallbackID
-}
-
 func (d *OpenCodeDetector) ListSessions(cwd string) ([]session.Session, error) {
 	dbPath := d.dbPath()
 	if _, err := os.Stat(dbPath); err != nil {
@@ -82,18 +61,11 @@ func (d *OpenCodeDetector) ListSessions(cwd string) ([]session.Session, error) {
 	}
 	defer db.Close()
 
-	projectID := d.findProjectID(db, cwd)
-	if projectID == "" {
-		return nil, nil
-	}
-
 	rows, err := db.Query(`
-		SELECT id, title, time_created, time_updated, model
+		SELECT id, title, time_created, time_updated, model, directory
 		FROM session
-		WHERE project_id = ?
 		ORDER BY time_updated DESC
-		LIMIT 50
-	`, projectID)
+	`)
 	if err != nil {
 		return nil, err
 	}
@@ -105,8 +77,12 @@ func (d *OpenCodeDetector) ListSessions(cwd string) ([]session.Session, error) {
 		var title string
 		var timeCreated, timeUpdated int64
 		var modelJSON string
+		var directory string
 
-		if err := rows.Scan(&s.ID, &title, &timeCreated, &timeUpdated, &modelJSON); err != nil {
+		if err := rows.Scan(&s.ID, &title, &timeCreated, &timeUpdated, &modelJSON, &directory); err != nil {
+			continue
+		}
+		if !samePath(directory, cwd) {
 			continue
 		}
 

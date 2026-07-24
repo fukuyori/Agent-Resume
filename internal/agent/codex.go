@@ -13,10 +13,12 @@ import (
 	"agres/internal/session"
 )
 
-type CodexDetector struct{}
+type CodexDetector struct {
+	dir string
+}
 
 func (d *CodexDetector) Name() session.Agent { return session.AgentCodex }
-func (d *CodexDetector) Icon() string         { return "codex" }
+func (d *CodexDetector) Icon() string        { return "codex" }
 
 func (d *CodexDetector) homeDir() string {
 	if h, err := os.UserHomeDir(); err == nil {
@@ -26,6 +28,9 @@ func (d *CodexDetector) homeDir() string {
 }
 
 func (d *CodexDetector) codexDir() string {
+	if d.dir != "" {
+		return d.dir
+	}
 	return filepath.Join(d.homeDir(), ".codex")
 }
 
@@ -122,7 +127,7 @@ func cleanCodexText(s string) string {
 	return cleanContent(s)
 }
 
-func (d *CodexDetector) parseRolloutFile(path string, normCwd string) (*session.Session, error) {
+func (d *CodexDetector) parseRolloutFile(path string, cwd string) (*session.Session, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
@@ -148,6 +153,7 @@ func (d *CodexDetector) parseRolloutFile(path string, normCwd string) (*session.
 	scanner.Buffer(make([]byte, 0, 1024*1024), 1024*1024)
 
 	matchedCwd := false
+	projectCwdSeen := false
 	lineCount := 0
 
 	for scanner.Scan() {
@@ -194,7 +200,11 @@ func (d *CodexDetector) parseRolloutFile(path string, normCwd string) (*session.
 					s.ID = meta.ID
 					s.ResumeCmd = []string{"codex", "resume", meta.ID}
 				}
-				if meta.Cwd != "" && normalizePath(meta.Cwd) == normCwd {
+				if meta.Cwd != "" {
+					projectCwdSeen = true
+					if !samePath(meta.Cwd, cwd) {
+						return nil, nil
+					}
 					matchedCwd = true
 				}
 				if meta.Title != "" {
@@ -210,7 +220,11 @@ func (d *CodexDetector) parseRolloutFile(path string, normCwd string) (*session.
 				Model string `json:"model"`
 			}
 			if err := json.Unmarshal(raw.Payload, &ctx); err == nil {
-				if ctx.Cwd != "" && normalizePath(ctx.Cwd) == normCwd {
+				if !projectCwdSeen && ctx.Cwd != "" {
+					projectCwdSeen = true
+					if !samePath(ctx.Cwd, cwd) {
+						return nil, nil
+					}
 					matchedCwd = true
 				}
 				if ctx.Model != "" && s.Model == "" {
@@ -265,8 +279,8 @@ func (d *CodexDetector) parseRolloutFile(path string, normCwd string) (*session.
 }
 
 func (d *CodexDetector) ListSessions(cwd string) ([]session.Session, error) {
-	normCwd := normalizePath(cwd)
 	sessionMap := make(map[string]*session.Session)
+	indexMap := make(map[string]*session.Session)
 
 	// 1. Read history.jsonl
 	historyMap := d.readHistoryMap()
@@ -292,10 +306,6 @@ func (d *CodexDetector) ListSessions(cwd string) ([]session.Session, error) {
 				continue
 			}
 
-			if entry.Cwd != "" && normalizePath(entry.Cwd) != normCwd {
-				continue
-			}
-
 			s := &session.Session{
 				ID:        entry.ID,
 				Agent:     session.AgentCodex,
@@ -310,7 +320,13 @@ func (d *CodexDetector) ListSessions(cwd string) ([]session.Session, error) {
 				}
 			}
 
-			sessionMap[entry.ID] = s
+			indexMap[entry.ID] = s
+			// Current Codex indexes commonly omit cwd. Such entries may enrich
+			// a rollout that independently matches cwd, but must not establish
+			// project membership by themselves.
+			if samePath(entry.Cwd, cwd) {
+				sessionMap[entry.ID] = s
+			}
 		}
 	}
 
@@ -325,7 +341,7 @@ func (d *CodexDetector) ListSessions(cwd string) ([]session.Session, error) {
 				return nil
 			}
 
-			s, parseErr := d.parseRolloutFile(path, normCwd)
+			s, parseErr := d.parseRolloutFile(path, cwd)
 			if parseErr != nil || s == nil {
 				return nil
 			}
@@ -344,6 +360,14 @@ func (d *CodexDetector) ListSessions(cwd string) ([]session.Session, error) {
 					existing.CreatedAt = s.CreatedAt
 				}
 			} else {
+				if indexed, ok := indexMap[s.ID]; ok {
+					if s.Title == "" || s.Title == "Untitled session" {
+						s.Title = indexed.Title
+					}
+					if s.UpdatedAt.IsZero() {
+						s.UpdatedAt = indexed.UpdatedAt
+					}
+				}
 				sessionMap[s.ID] = s
 			}
 			return nil
@@ -378,4 +402,3 @@ func (d *CodexDetector) ListSessions(cwd string) ([]session.Session, error) {
 
 	return sessions, nil
 }
-

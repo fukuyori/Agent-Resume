@@ -14,7 +14,7 @@ import (
 	"agres/internal/tui"
 )
 
-var version = "0.2.1"
+var version = "0.3.0"
 
 func parseArgs(args []string) (limit int, showVersion bool, showHelp bool, err error) {
 	limit = 10
@@ -124,10 +124,6 @@ func main() {
 		wg.Add(1)
 		go func(i int, d session.Detector) {
 			defer wg.Done()
-			if !d.Detect(cwd) {
-				results[i] = result{}
-				return
-			}
 			sessions, err := d.ListSessions(cwd)
 			results[i] = result{sessions: sessions, err: err}
 		}(i, d)
@@ -181,4 +177,3 @@ func main() {
 		os.Exit(1)
 	}
 }
-
