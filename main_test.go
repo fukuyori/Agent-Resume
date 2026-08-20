@@ -1,7 +1,11 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
+
+	"agres/internal/session"
 )
 
 func TestParseArgs(t *testing.T) {
@@ -9,6 +13,7 @@ func TestParseArgs(t *testing.T) {
 		name        string
 		args        []string
 		wantLimit   int
+		wantAll     bool
 		wantVersion bool
 		wantHelp    bool
 		wantErr     bool
@@ -20,6 +25,18 @@ func TestParseArgs(t *testing.T) {
 			wantVersion: false,
 			wantHelp:    false,
 			wantErr:     false,
+		},
+		{
+			name:      "all projects short flag",
+			args:      []string{"-a"},
+			wantLimit: 10,
+			wantAll:   true,
+		},
+		{
+			name:      "all projects long flag with limit",
+			args:      []string{"--all", "--limit", "25"},
+			wantLimit: 25,
+			wantAll:   true,
 		},
 		{
 			name:        "positional limit",
@@ -122,7 +139,7 @@ func TestParseArgs(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotLimit, gotVersion, gotHelp, err := parseArgs(tt.args)
+			opts, err := parseArgs(tt.args)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("parseArgs() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -130,15 +147,59 @@ func TestParseArgs(t *testing.T) {
 			if tt.wantErr {
 				return
 			}
-			if gotLimit != tt.wantLimit {
-				t.Errorf("parseArgs() gotLimit = %v, want %v", gotLimit, tt.wantLimit)
+			if opts.limit != tt.wantLimit {
+				t.Errorf("parseArgs() limit = %v, want %v", opts.limit, tt.wantLimit)
 			}
-			if gotVersion != tt.wantVersion {
-				t.Errorf("parseArgs() gotVersion = %v, want %v", gotVersion, tt.wantVersion)
+			if opts.allProjects != tt.wantAll {
+				t.Errorf("parseArgs() allProjects = %v, want %v", opts.allProjects, tt.wantAll)
 			}
-			if gotHelp != tt.wantHelp {
-				t.Errorf("parseArgs() gotHelp = %v, want %v", gotHelp, tt.wantHelp)
+			if opts.showVersion != tt.wantVersion {
+				t.Errorf("parseArgs() showVersion = %v, want %v", opts.showVersion, tt.wantVersion)
+			}
+			if opts.showHelp != tt.wantHelp {
+				t.Errorf("parseArgs() showHelp = %v, want %v", opts.showHelp, tt.wantHelp)
 			}
 		})
+	}
+}
+
+func TestResumeCommandUsesOriginalWorkingDirectory(t *testing.T) {
+	workDir := t.TempDir()
+	selected := session.Session{
+		WorkDir:   workDir,
+		ResumeCmd: []string{"agent-command", "--resume", "session-id"},
+	}
+
+	cmd, err := resumeCommand(selected)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cmd.Dir != workDir {
+		t.Fatalf("resumeCommand() Dir = %q; want %q", cmd.Dir, workDir)
+	}
+}
+
+func TestResumeCommandRejectsMissingWorkingDirectory(t *testing.T) {
+	selected := session.Session{
+		WorkDir:   filepath.Join(t.TempDir(), "missing"),
+		ResumeCmd: []string{"agent-command", "--resume", "session-id"},
+	}
+
+	if _, err := resumeCommand(selected); err == nil {
+		t.Fatal("resumeCommand() succeeded for a missing working directory")
+	}
+
+	selected.WorkDir = ""
+	if _, err := resumeCommand(selected); err == nil {
+		t.Fatal("resumeCommand() succeeded without a working directory")
+	}
+
+	filePath := filepath.Join(t.TempDir(), "file")
+	if err := os.WriteFile(filePath, []byte("not a directory"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	selected.WorkDir = filePath
+	if _, err := resumeCommand(selected); err == nil {
+		t.Fatal("resumeCommand() succeeded with a file as working directory")
 	}
 }

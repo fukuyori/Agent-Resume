@@ -41,7 +41,7 @@ func TestOpenCodeSessionsUseSessionDirectory(t *testing.T) {
 	}
 
 	d := &OpenCodeDetector{dir: root}
-	sessions, err := d.ListSessions(cwd)
+	sessions, err := d.ListSessions(cwd, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,5 +50,16 @@ func TestOpenCodeSessionsUseSessionDirectory(t *testing.T) {
 	}
 	if sessions[0].ID != "matching" {
 		t.Fatalf("ListSessions returned session %q; want matching", sessions[0].ID)
+	}
+	if sessions[0].WorkDir != cwd {
+		t.Fatalf("ListSessions returned WorkDir %q; want %q", sessions[0].WorkDir, cwd)
+	}
+
+	allSessions, err := d.ListSessions(cwd, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(allSessions) != 2 {
+		t.Fatalf("all-project ListSessions returned %d sessions; want 2: %#v", len(allSessions), allSessions)
 	}
 }

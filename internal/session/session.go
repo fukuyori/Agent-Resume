@@ -17,6 +17,7 @@ type Session struct {
 	Agent     Agent
 	Title     string
 	Summary   string
+	WorkDir   string
 	CreatedAt time.Time
 	UpdatedAt time.Time
 	Model     string
@@ -27,5 +28,5 @@ type Detector interface {
 	Name() Agent
 	Icon() string
 	Detect(cwd string) bool
-	ListSessions(cwd string) ([]Session, error)
+	ListSessions(cwd string, allProjects bool) ([]Session, error)
 }

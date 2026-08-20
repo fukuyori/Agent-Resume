@@ -13,7 +13,7 @@ import (
 type AiderDetector struct{}
 
 func (d *AiderDetector) Name() session.Agent { return session.AgentAider }
-func (d *AiderDetector) Icon() string         { return "\u2693\ufe0f" }
+func (d *AiderDetector) Icon() string        { return "\u2693\ufe0f" }
 
 func (d *AiderDetector) historyFile(cwd string) string {
 	abs, _ := filepath.Abs(cwd)
@@ -25,7 +25,7 @@ func (d *AiderDetector) Detect(cwd string) bool {
 	return err == nil && !info.IsDir()
 }
 
-func (d *AiderDetector) ListSessions(cwd string) ([]session.Session, error) {
+func (d *AiderDetector) ListSessions(cwd string, allProjects bool) ([]session.Session, error) {
 	path := d.historyFile(cwd)
 	f, err := os.Open(path)
 	if err != nil {
@@ -55,6 +55,7 @@ func (d *AiderDetector) ListSessions(cwd string) ([]session.Session, error) {
 				ID:        filepath.Base(path),
 				Agent:     session.AgentAider,
 				Title:     strings.TrimPrefix(line, "# "),
+				WorkDir:   filepath.Dir(path),
 				ResumeCmd: []string{"aider", "--resume"},
 				UpdatedAt: stat.ModTime(),
 			}
@@ -74,6 +75,7 @@ func (d *AiderDetector) ListSessions(cwd string) ([]session.Session, error) {
 			ID:        filepath.Base(path),
 			Agent:     session.AgentAider,
 			Title:     "Chat history",
+			WorkDir:   filepath.Dir(path),
 			ResumeCmd: []string{"aider", "--resume"},
 			UpdatedAt: stat.ModTime(),
 		})

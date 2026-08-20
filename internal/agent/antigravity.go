@@ -12,12 +12,17 @@ import (
 	"agres/internal/session"
 )
 
-type AntigravityDetector struct{}
+type AntigravityDetector struct {
+	dir string
+}
 
 func (d *AntigravityDetector) Name() session.Agent { return session.AgentAntigravity }
 func (d *AntigravityDetector) Icon() string        { return "agy" }
 
 func (d *AntigravityDetector) baseDir() string {
+	if d.dir != "" {
+		return d.dir
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return ""
@@ -54,7 +59,7 @@ func (d *AntigravityDetector) Detect(cwd string) bool {
 	return false
 }
 
-func (d *AntigravityDetector) ListSessions(cwd string) ([]session.Session, error) {
+func (d *AntigravityDetector) ListSessions(cwd string, allProjects bool) ([]session.Session, error) {
 	sessionMap := make(map[string]*session.Session)
 
 	// 1. Read metadata cache if available
@@ -76,16 +81,26 @@ func (d *AntigravityDetector) ListSessions(cwd string) ([]session.Session, error
 		if err := json.NewDecoder(mf).Decode(&meta); err == nil {
 			for uuid, c := range meta.Conversations {
 				matched := false
+				workDir := ""
 				for _, uri := range c.Summary.WorkspaceURIs {
-					if samePath(fileURIPath(uri), cwd) {
+					candidate := fileURIPath(uri)
+					if workDir == "" {
+						workDir = candidate
+					}
+					if samePath(candidate, cwd) {
 						matched = true
+						workDir = candidate
 						break
 					}
+				}
+				if allProjects && workDir != "" {
+					matched = true
 				}
 				if matched {
 					s := &session.Session{
 						ID:        uuid,
 						Agent:     session.AgentAntigravity,
+						WorkDir:   workDir,
 						ResumeCmd: []string{"agy", "--conversation", uuid},
 					}
 					if c.Summary.Title != "" {
@@ -122,11 +137,16 @@ func (d *AntigravityDetector) ListSessions(cwd string) ([]session.Session, error
 		var mappings map[string]string
 		if err := json.NewDecoder(f).Decode(&mappings); err == nil {
 			for wsPath, uuid := range mappings {
-				if samePath(wsPath, cwd) {
-					if _, exists := sessionMap[uuid]; !exists {
+				if wsPath != "" && (allProjects || samePath(wsPath, cwd)) {
+					if existing, exists := sessionMap[uuid]; exists {
+						if existing.WorkDir == "" || samePath(wsPath, cwd) {
+							existing.WorkDir = wsPath
+						}
+					} else {
 						sessionMap[uuid] = &session.Session{
 							ID:        uuid,
 							Agent:     session.AgentAntigravity,
+							WorkDir:   wsPath,
 							ResumeCmd: []string{"agy", "--conversation", uuid},
 						}
 					}
@@ -159,6 +179,7 @@ func (d *AntigravityDetector) parseTranscript(path, uuid string, base *session.S
 	}
 	if base != nil {
 		s.Title = base.Title
+		s.WorkDir = base.WorkDir
 		s.CreatedAt = base.CreatedAt
 		s.UpdatedAt = base.UpdatedAt
 	}

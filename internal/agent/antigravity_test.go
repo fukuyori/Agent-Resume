@@ -1,6 +1,9 @@
 package agent
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -48,5 +51,62 @@ func TestParseAntigravityTime(t *testing.T) {
 				t.Errorf("parseAntigravityTime() got zero time for valid input %s", tt.input)
 			}
 		})
+	}
+}
+
+func TestAntigravityAllProjectsIncludesWorkingDirectories(t *testing.T) {
+	root := t.TempDir()
+	cacheDir := filepath.Join(root, "cache")
+	if err := os.MkdirAll(cacheDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	projectA := filepath.Join(root, "project-a")
+	projectB := filepath.Join(root, "project-b")
+	for _, dir := range []string{projectA, projectB} {
+		if err := os.Mkdir(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	metadata := map[string]any{
+		"conversations": map[string]any{
+			"session-a": map[string]any{
+				"summary": map[string]any{
+					"Title":         "session A",
+					"WorkspaceURIs": []string{projectA},
+				},
+			},
+			"session-b": map[string]any{
+				"summary": map[string]any{
+					"Title":         "session B",
+					"WorkspaceURIs": []string{projectB},
+				},
+			},
+		},
+	}
+	data, err := json.Marshal(metadata)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cacheDir, "conversation_metadata.json"), data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	d := &AntigravityDetector{dir: root}
+	current, err := d.ListSessions(projectA, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(current) != 1 || current[0].WorkDir != projectA {
+		t.Fatalf("current-project sessions = %#v; want only project A", current)
+	}
+
+	all, err := d.ListSessions(projectA, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(all) != 2 {
+		t.Fatalf("all-project sessions returned %d sessions; want 2: %#v", len(all), all)
 	}
 }

@@ -12,7 +12,9 @@ import (
 	"agres/internal/session"
 )
 
-type ClaudeDetector struct{}
+type ClaudeDetector struct {
+	dir string
+}
 
 func (d *ClaudeDetector) Name() session.Agent { return session.AgentClaude }
 func (d *ClaudeDetector) Icon() string        { return "claude" }
@@ -36,6 +38,9 @@ func (d *ClaudeDetector) projectSlug(cwd string) string {
 }
 
 func (d *ClaudeDetector) projectsDir() string {
+	if d.dir != "" {
+		return d.dir
+	}
 	return filepath.Join(d.homeDir(), ".claude", "projects")
 }
 
@@ -84,12 +89,41 @@ func (d *ClaudeDetector) Detect(cwd string) bool {
 	return dir != ""
 }
 
-func (d *ClaudeDetector) ListSessions(cwd string) ([]session.Session, error) {
-	dir := d.findProjectDir(cwd)
-	if dir == "" {
-		return nil, nil
+func (d *ClaudeDetector) ListSessions(cwd string, allProjects bool) ([]session.Session, error) {
+	var projectDirs []string
+	if allProjects {
+		entries, err := os.ReadDir(d.projectsDir())
+		if err != nil {
+			if os.IsNotExist(err) {
+				return nil, nil
+			}
+			return nil, err
+		}
+		for _, entry := range entries {
+			if entry.IsDir() {
+				projectDirs = append(projectDirs, filepath.Join(d.projectsDir(), entry.Name()))
+			}
+		}
+	} else {
+		dir := d.findProjectDir(cwd)
+		if dir == "" {
+			return nil, nil
+		}
+		projectDirs = append(projectDirs, dir)
 	}
 
+	var sessions []session.Session
+	for _, dir := range projectDirs {
+		found, err := d.listProjectSessions(dir, cwd, allProjects)
+		if err != nil {
+			continue
+		}
+		sessions = append(sessions, found...)
+	}
+	return sessions, nil
+}
+
+func (d *ClaudeDetector) listProjectSessions(dir, cwd string, allProjects bool) ([]session.Session, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, err
@@ -100,7 +134,7 @@ func (d *ClaudeDetector) ListSessions(cwd string) ([]session.Session, error) {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".jsonl") {
 			continue
 		}
-		s, err := d.parseSessionFile(filepath.Join(dir, e.Name()), cwd)
+		s, err := d.parseSessionFile(filepath.Join(dir, e.Name()), cwd, allProjects)
 		if err != nil || s == nil {
 			continue
 		}
@@ -109,7 +143,7 @@ func (d *ClaudeDetector) ListSessions(cwd string) ([]session.Session, error) {
 	return sessions, nil
 }
 
-func (d *ClaudeDetector) parseSessionFile(path, cwd string) (*session.Session, error) {
+func (d *ClaudeDetector) parseSessionFile(path, cwd string, allProjects bool) (*session.Session, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
@@ -168,7 +202,11 @@ func (d *ClaudeDetector) parseSessionFile(path, cwd string) (*session.Session, e
 			}
 		}
 
-		if samePath(msg.Cwd, cwd) {
+		if !matchedCwd && msg.Cwd != "" {
+			s.WorkDir = msg.Cwd
+			if !allProjects && !samePath(msg.Cwd, cwd) {
+				return nil, nil
+			}
 			matchedCwd = true
 		}
 
@@ -266,8 +304,12 @@ func cleanContent(s string) string {
 }
 
 func truncate(s string, max int) string {
-	if len(s) <= max {
+	runes := []rune(s)
+	if len(runes) <= max {
 		return s
 	}
-	return s[:max-3] + "..."
+	if max <= 3 {
+		return string(runes[:max])
+	}
+	return string(runes[:max-3]) + "..."
 }

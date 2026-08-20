@@ -14,86 +14,98 @@ import (
 	"agres/internal/tui"
 )
 
-var version = "0.3.0"
+var version = "0.4.0"
 
-func parseArgs(args []string) (limit int, showVersion bool, showHelp bool, err error) {
-	limit = 10
+type cliOptions struct {
+	limit       int
+	allProjects bool
+	showVersion bool
+	showHelp    bool
+}
+
+func parseArgs(args []string) (cliOptions, error) {
+	opts := cliOptions{limit: 10}
 
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
 		switch {
 		case arg == "-v" || arg == "--version" || arg == "-version":
-			showVersion = true
-			return
+			opts.showVersion = true
+			return opts, nil
 		case arg == "-h" || arg == "--help" || arg == "-help":
-			showHelp = true
-			return
+			opts.showHelp = true
+			return opts, nil
+		case arg == "-a" || arg == "--all":
+			opts.allProjects = true
 		case arg == "-n" || arg == "-l" || arg == "--limit" || arg == "-limit" || arg == "--number" || arg == "-number":
 			if i+1 >= len(args) {
-				return 0, false, false, fmt.Errorf("flag '%s' requires an integer argument", arg)
+				return cliOptions{}, fmt.Errorf("flag '%s' requires an integer argument", arg)
 			}
 			i++
 			val, convErr := strconv.Atoi(args[i])
 			if convErr != nil || val <= 0 {
-				return 0, false, false, fmt.Errorf("invalid count '%s': must be a positive integer", args[i])
+				return cliOptions{}, fmt.Errorf("invalid count '%s': must be a positive integer", args[i])
 			}
-			limit = val
+			opts.limit = val
 		case strings.HasPrefix(arg, "-n=") || strings.HasPrefix(arg, "-l=") || strings.HasPrefix(arg, "--limit=") || strings.HasPrefix(arg, "-limit=") || strings.HasPrefix(arg, "--number=") || strings.HasPrefix(arg, "-number="):
 			parts := strings.SplitN(arg, "=", 2)
 			val, convErr := strconv.Atoi(parts[1])
 			if convErr != nil || val <= 0 {
-				return 0, false, false, fmt.Errorf("invalid count '%s': must be a positive integer", parts[1])
+				return cliOptions{}, fmt.Errorf("invalid count '%s': must be a positive integer", parts[1])
 			}
-			limit = val
+			opts.limit = val
 		case !strings.HasPrefix(arg, "-"):
 			val, convErr := strconv.Atoi(arg)
 			if convErr == nil {
 				if val <= 0 {
-					return 0, false, false, fmt.Errorf("invalid count '%s': must be a positive integer", arg)
+					return cliOptions{}, fmt.Errorf("invalid count '%s': must be a positive integer", arg)
 				}
-				limit = val
+				opts.limit = val
 			} else {
-				return 0, false, false, fmt.Errorf("unknown argument '%s'", arg)
+				return cliOptions{}, fmt.Errorf("unknown argument '%s'", arg)
 			}
 		default:
-			return 0, false, false, fmt.Errorf("unknown flag '%s'", arg)
+			return cliOptions{}, fmt.Errorf("unknown flag '%s'", arg)
 		}
 	}
 
-	return limit, false, false, nil
+	return opts, nil
 }
 
 func printHelp() {
 	fmt.Printf("agres %s\n", version)
-	fmt.Println("Resume CLI coding agent sessions from the current directory.")
+	fmt.Println("Resume CLI coding agent sessions from the current directory or all projects.")
 	fmt.Println()
 	fmt.Println("Usage:")
 	fmt.Println("  agres [options] [count]")
 	fmt.Println()
 	fmt.Println("Options:")
+	fmt.Println("  -a, --all                 Show sessions from all projects")
 	fmt.Println("  -n, -l, --limit <count>   Number of history items to show (default: 10)")
 	fmt.Println("  -v, --version             Show version information")
 	fmt.Println("  -h, --help                Show help message")
 	fmt.Println()
 	fmt.Println("Examples:")
 	fmt.Println("  agres")
+	fmt.Println("  agres --all")
+	fmt.Println("  agres -a --limit 20")
 	fmt.Println("  agres 20")
 	fmt.Println("  agres -n 20")
 }
 
 func main() {
-	limit, showVersion, showHelp, err := parseArgs(os.Args[1:])
+	opts, err := parseArgs(os.Args[1:])
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
 
-	if showVersion {
+	if opts.showVersion {
 		fmt.Printf("agres %s\n", version)
 		os.Exit(0)
 	}
 
-	if showHelp {
+	if opts.showHelp {
 		printHelp()
 		os.Exit(0)
 	}
@@ -124,7 +136,7 @@ func main() {
 		wg.Add(1)
 		go func(i int, d session.Detector) {
 			defer wg.Done()
-			sessions, err := d.ListSessions(cwd)
+			sessions, err := d.ListSessions(cwd, opts.allProjects)
 			results[i] = result{sessions: sessions, err: err}
 		}(i, d)
 	}
@@ -139,8 +151,12 @@ func main() {
 	}
 
 	if len(allSessions) == 0 {
-		fmt.Printf("No agent sessions found in: %s\n", cwd)
-		fmt.Println("Run agres from a project directory that has agent sessions.")
+		if opts.allProjects {
+			fmt.Println("No agent sessions found.")
+		} else {
+			fmt.Printf("No agent sessions found in: %s\n", cwd)
+			fmt.Println("Run agres from a project directory that has agent sessions.")
+		}
 		os.Exit(0)
 	}
 
@@ -148,11 +164,11 @@ func main() {
 		return allSessions[i].UpdatedAt.After(allSessions[j].UpdatedAt)
 	})
 
-	if len(allSessions) > limit {
-		allSessions = allSessions[:limit]
+	if len(allSessions) > opts.limit {
+		allSessions = allSessions[:opts.limit]
 	}
 
-	selected, err := tui.Run(allSessions, os.Stderr, version)
+	selected, err := tui.Run(allSessions, os.Stderr, version, opts.allProjects)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
@@ -162,12 +178,11 @@ func main() {
 		os.Exit(0)
 	}
 
-	execPath, err := exec.LookPath(selected.ResumeCmd[0])
+	cmd, err := resumeCommand(*selected)
 	if err != nil {
-		execPath = selected.ResumeCmd[0]
+		fmt.Fprintf(os.Stderr, "Cannot resume %s session: %v\n", selected.Agent, err)
+		os.Exit(1)
 	}
-
-	cmd := exec.Command(execPath, selected.ResumeCmd[1:]...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -176,4 +191,28 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Failed to start %s: %v\n", selected.Agent, err)
 		os.Exit(1)
 	}
+}
+
+func resumeCommand(selected session.Session) (*exec.Cmd, error) {
+	if len(selected.ResumeCmd) == 0 {
+		return nil, fmt.Errorf("resume command is unavailable")
+	}
+	if selected.WorkDir == "" {
+		return nil, fmt.Errorf("original working directory is unavailable")
+	}
+	info, err := os.Stat(selected.WorkDir)
+	if err != nil {
+		return nil, fmt.Errorf("original working directory %q: %w", selected.WorkDir, err)
+	}
+	if !info.IsDir() {
+		return nil, fmt.Errorf("original working directory %q is not a directory", selected.WorkDir)
+	}
+
+	execPath, err := exec.LookPath(selected.ResumeCmd[0])
+	if err != nil {
+		execPath = selected.ResumeCmd[0]
+	}
+	cmd := exec.Command(execPath, selected.ResumeCmd[1:]...)
+	cmd.Dir = selected.WorkDir
+	return cmd, nil
 }

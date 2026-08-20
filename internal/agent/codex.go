@@ -50,7 +50,7 @@ func (d *CodexDetector) sessionsDirs() []string {
 }
 
 func (d *CodexDetector) Detect(cwd string) bool {
-	sessions, err := d.ListSessions(cwd)
+	sessions, err := d.ListSessions(cwd, false)
 	return err == nil && len(sessions) > 0
 }
 
@@ -127,7 +127,7 @@ func cleanCodexText(s string) string {
 	return cleanContent(s)
 }
 
-func (d *CodexDetector) parseRolloutFile(path string, cwd string) (*session.Session, error) {
+func (d *CodexDetector) parseRolloutFile(path string, cwd string, allProjects bool) (*session.Session, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
@@ -202,7 +202,8 @@ func (d *CodexDetector) parseRolloutFile(path string, cwd string) (*session.Sess
 				}
 				if meta.Cwd != "" {
 					projectCwdSeen = true
-					if !samePath(meta.Cwd, cwd) {
+					s.WorkDir = meta.Cwd
+					if !allProjects && !samePath(meta.Cwd, cwd) {
 						return nil, nil
 					}
 					matchedCwd = true
@@ -222,7 +223,8 @@ func (d *CodexDetector) parseRolloutFile(path string, cwd string) (*session.Sess
 			if err := json.Unmarshal(raw.Payload, &ctx); err == nil {
 				if !projectCwdSeen && ctx.Cwd != "" {
 					projectCwdSeen = true
-					if !samePath(ctx.Cwd, cwd) {
+					s.WorkDir = ctx.Cwd
+					if !allProjects && !samePath(ctx.Cwd, cwd) {
 						return nil, nil
 					}
 					matchedCwd = true
@@ -278,7 +280,7 @@ func (d *CodexDetector) parseRolloutFile(path string, cwd string) (*session.Sess
 	return s, nil
 }
 
-func (d *CodexDetector) ListSessions(cwd string) ([]session.Session, error) {
+func (d *CodexDetector) ListSessions(cwd string, allProjects bool) ([]session.Session, error) {
 	sessionMap := make(map[string]*session.Session)
 	indexMap := make(map[string]*session.Session)
 
@@ -310,6 +312,7 @@ func (d *CodexDetector) ListSessions(cwd string) ([]session.Session, error) {
 				ID:        entry.ID,
 				Agent:     session.AgentCodex,
 				Title:     entry.ThreadName,
+				WorkDir:   entry.Cwd,
 				ResumeCmd: []string{"codex", "resume", entry.ID},
 			}
 
@@ -324,7 +327,7 @@ func (d *CodexDetector) ListSessions(cwd string) ([]session.Session, error) {
 			// Current Codex indexes commonly omit cwd. Such entries may enrich
 			// a rollout that independently matches cwd, but must not establish
 			// project membership by themselves.
-			if samePath(entry.Cwd, cwd) {
+			if entry.Cwd != "" && (allProjects || samePath(entry.Cwd, cwd)) {
 				sessionMap[entry.ID] = s
 			}
 		}
@@ -341,7 +344,7 @@ func (d *CodexDetector) ListSessions(cwd string) ([]session.Session, error) {
 				return nil
 			}
 
-			s, parseErr := d.parseRolloutFile(path, cwd)
+			s, parseErr := d.parseRolloutFile(path, cwd, allProjects)
 			if parseErr != nil || s == nil {
 				return nil
 			}
@@ -352,6 +355,9 @@ func (d *CodexDetector) ListSessions(cwd string) ([]session.Session, error) {
 				}
 				if existing.Model == "" {
 					existing.Model = s.Model
+				}
+				if existing.WorkDir == "" {
+					existing.WorkDir = s.WorkDir
 				}
 				if s.UpdatedAt.After(existing.UpdatedAt) {
 					existing.UpdatedAt = s.UpdatedAt

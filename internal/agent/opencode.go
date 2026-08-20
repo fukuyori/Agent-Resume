@@ -49,7 +49,7 @@ func (d *OpenCodeDetector) Detect(cwd string) bool {
 	return err == nil && count > 0
 }
 
-func (d *OpenCodeDetector) ListSessions(cwd string) ([]session.Session, error) {
+func (d *OpenCodeDetector) ListSessions(cwd string, allProjects bool) ([]session.Session, error) {
 	dbPath := d.dbPath()
 	if _, err := os.Stat(dbPath); err != nil {
 		return nil, err
@@ -82,12 +82,13 @@ func (d *OpenCodeDetector) ListSessions(cwd string) ([]session.Session, error) {
 		if err := rows.Scan(&s.ID, &title, &timeCreated, &timeUpdated, &modelJSON, &directory); err != nil {
 			continue
 		}
-		if !samePath(directory, cwd) {
+		if directory == "" || (!allProjects && !samePath(directory, cwd)) {
 			continue
 		}
 
 		s.Agent = session.AgentOpenCode
 		s.Title = title
+		s.WorkDir = directory
 		s.Model = extractModelName(modelJSON)
 		s.ResumeCmd = []string{"opencode", "--session", s.ID}
 

@@ -57,7 +57,7 @@ func TestCodexDetectorRealDirectory(t *testing.T) {
 	d := &CodexDetector{}
 	// Test ListSessions on current working directory or user home
 	cwd, _ := os.Getwd()
-	sessions, err := d.ListSessions(cwd)
+	sessions, err := d.ListSessions(cwd, false)
 	if err != nil {
 		t.Fatalf("ListSessions failed: %v", err)
 	}
@@ -113,7 +113,7 @@ func TestCodexIndexRequiresMatchingCwd(t *testing.T) {
 	}
 
 	d := &CodexDetector{dir: root}
-	sessions, err := d.ListSessions(cwd)
+	sessions, err := d.ListSessions(cwd, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -122,5 +122,16 @@ func TestCodexIndexRequiresMatchingCwd(t *testing.T) {
 	}
 	if sessions[0].ID != "matching-cwd" {
 		t.Fatalf("ListSessions returned session %q; want matching-cwd", sessions[0].ID)
+	}
+	if sessions[0].WorkDir != cwd {
+		t.Fatalf("ListSessions returned WorkDir %q; want %q", sessions[0].WorkDir, cwd)
+	}
+
+	allSessions, err := d.ListSessions(cwd, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(allSessions) != 2 {
+		t.Fatalf("all-project ListSessions returned %d sessions; want 2: %#v", len(allSessions), allSessions)
 	}
 }
