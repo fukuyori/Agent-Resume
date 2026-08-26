@@ -146,6 +146,7 @@ func (d *CodexDetector) parseRolloutFile(path string, cwd string, allProjects bo
 		Agent:     session.AgentCodex,
 		UpdatedAt: stat.ModTime(),
 		CreatedAt: stat.ModTime(),
+		Size:      stat.Size(),
 		ResumeCmd: []string{"codex", "resume", sessionID},
 	}
 
@@ -154,6 +155,7 @@ func (d *CodexDetector) parseRolloutFile(path string, cwd string, allProjects bo
 
 	matchedCwd := false
 	projectCwdSeen := false
+	metaSeen := false
 	lineCount := 0
 
 	for scanner.Scan() {
@@ -196,6 +198,13 @@ func (d *CodexDetector) parseRolloutFile(path string, cwd string, allProjects bo
 				Cwd        string `json:"cwd"`
 			}
 			if err := json.Unmarshal(raw.Payload, &meta); err == nil {
+				// Forked rollouts copy the parent's history, including the
+				// parent's session_meta, after their own. Only the first
+				// session_meta identifies this rollout.
+				if metaSeen {
+					continue
+				}
+				metaSeen = true
 				if meta.ID != "" {
 					s.ID = meta.ID
 					s.ResumeCmd = []string{"codex", "resume", meta.ID}
@@ -359,6 +368,7 @@ func (d *CodexDetector) ListSessions(cwd string, allProjects bool) ([]session.Se
 				if existing.WorkDir == "" {
 					existing.WorkDir = s.WorkDir
 				}
+				existing.Size += s.Size
 				if s.UpdatedAt.After(existing.UpdatedAt) {
 					existing.UpdatedAt = s.UpdatedAt
 				}

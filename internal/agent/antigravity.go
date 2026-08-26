@@ -190,6 +190,7 @@ func (d *AntigravityDetector) parseTranscript(path, uuid string, base *session.S
 		modTime = info.ModTime()
 	}
 	if info, err := os.Stat(path); err == nil {
+		s.Size = info.Size()
 		if modTime.IsZero() || info.ModTime().After(modTime) {
 			modTime = info.ModTime()
 		}

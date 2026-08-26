@@ -21,6 +21,7 @@ type Session struct {
 	CreatedAt time.Time
 	UpdatedAt time.Time
 	Model     string
+	Size      int64 // stored history size in bytes (0 if unknown)
 	ResumeCmd []string
 }
 

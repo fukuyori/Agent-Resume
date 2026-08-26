@@ -105,7 +105,33 @@ func (d *OpenCodeDetector) ListSessions(cwd string, allProjects bool) ([]session
 
 		sessions = append(sessions, s)
 	}
+	rows.Close()
+
+	sizes := d.querySizes(db)
+	for i := range sessions {
+		sessions[i].Size = sizes[sessions[i].ID]
+	}
 	return sessions, nil
+}
+
+// querySizes returns the total stored bytes (message + part data) per session.
+func (d *OpenCodeDetector) querySizes(db *sql.DB) map[string]int64 {
+	sizes := make(map[string]int64)
+	for _, table := range []string{"message", "part"} {
+		rows, err := db.Query(`SELECT session_id, COALESCE(SUM(LENGTH(data)), 0) FROM ` + table + ` GROUP BY session_id`)
+		if err != nil {
+			continue
+		}
+		for rows.Next() {
+			var id string
+			var n int64
+			if err := rows.Scan(&id, &n); err == nil {
+				sizes[id] += n
+			}
+		}
+		rows.Close()
+	}
+	return sizes
 }
 
 func extractModelName(jsonStr string) string {

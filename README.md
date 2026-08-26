@@ -47,16 +47,16 @@ By default, `agres` shows the 10 most recently updated sessions from the current
 
 Aider stores history inside each project instead of a central index. Therefore, all-project mode includes Aider history only from the directory where `agres` was started; it does not scan the entire filesystem.
 
-Use arrow keys or `j`/`k` to navigate, `Enter` to select, `q` or `Esc` to quit. The selected session is highlighted across the entire row.
+Use arrow keys or `j`/`k` to navigate, `Enter` to select, `q` or `Esc` to quit. The selected session is highlighted across the entire row. Each row also shows the size of the stored history (`-` when unknown). Roughly 1MB of history corresponds to one full context window, so sizes of 3MB or more are shown in yellow (compacted several times; consider handing off to a new session) and 10MB or more in red (slow to resume and unlikely to retain early context).
 
 ```
-  agres 0.4.0  [all projects]
+  agres 0.5.0  [all projects]
   /projects/web-app
 
-   2026-07-22 06:30:00  [opencode]  [web-app]  Fix login bug  opencode
-   2026-07-21 22:15:00  [claude]    [api]      Refactor auth module  claude
-   2026-07-21 22:15:00  [agy]       [weather]  Check weather
-   2026-07-20 14:00:00  [aider]     [current]  Add unit tests
+   2026-07-22 06:30:00  [opencode]   45.2K  [web-app]  Fix login bug  opencode
+   2026-07-21 22:15:00  [claude]      1.3M  [api]      Refactor auth module  claude
+   2026-07-21 22:15:00  [agy]       210.0K  [weather]  Check weather
+   2026-07-20 14:00:00  [aider]       8.1K  [current]  Add unit tests
 
   j/k or ↑↓: navigate  enter: select  q/esc: quit
 ```
@@ -65,7 +65,7 @@ Use arrow keys or `j`/`k` to navigate, `Enter` to select, `q` or `Esc` to quit. 
 
 ```bash
 agres --version
-# agres 0.4.0
+# agres 0.5.0
 ```
 
 ## License

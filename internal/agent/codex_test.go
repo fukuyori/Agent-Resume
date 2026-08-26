@@ -135,3 +135,26 @@ func TestCodexIndexRequiresMatchingCwd(t *testing.T) {
 		t.Fatalf("all-project ListSessions returned %d sessions; want 2: %#v", len(allSessions), allSessions)
 	}
 }
+
+func TestCodexForkedRolloutKeepsOwnID(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "rollout-2026-03-26T16-21-10-019d2904-c0b9-7a92-96b8-a238db277d3f.jsonl")
+	content := `{"timestamp":"2026-03-26T07:21:15.604Z","type":"session_meta","payload":{"id":"019d2904-c0b9-7a92-96b8-a238db277d3f","forked_from_id":"019d28fd-aa1f-78b0-934e-87fde6a61d82","cwd":"D:/proj"}}
+{"timestamp":"2026-03-26T07:21:15.606Z","type":"session_meta","payload":{"id":"019d28fd-aa1f-78b0-934e-87fde6a61d82","cwd":"D:/proj"}}
+{"timestamp":"2026-03-26T07:21:16.000Z","type":"event_msg","payload":{"type":"user_message","message":"hello"}}
+`
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	d := &CodexDetector{}
+	s, err := d.parseRolloutFile(path, "", true)
+	if err != nil || s == nil {
+		t.Fatalf("parseRolloutFile failed: %v", err)
+	}
+	if s.ID != "019d2904-c0b9-7a92-96b8-a238db277d3f" {
+		t.Errorf("ID = %q; want forked session's own ID, not parent's", s.ID)
+	}
+	if len(s.ResumeCmd) != 3 || s.ResumeCmd[2] != s.ID {
+		t.Errorf("ResumeCmd = %v; want resume of %s", s.ResumeCmd, s.ID)
+	}
+}

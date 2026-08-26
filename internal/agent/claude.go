@@ -154,14 +154,17 @@ func (d *ClaudeDetector) parseSessionFile(path, cwd string, allProjects bool) (*
 	sessionID := strings.TrimSuffix(filepath.Base(path), ".jsonl")
 
 	var modTime time.Time
+	var size int64
 	if stat != nil {
 		modTime = stat.ModTime()
+		size = stat.Size()
 	}
 
 	s := &session.Session{
 		ID:        sessionID,
 		Agent:     session.AgentClaude,
 		UpdatedAt: modTime,
+		Size:      size,
 		ResumeCmd: []string{"claude", "--resume", sessionID},
 	}
 

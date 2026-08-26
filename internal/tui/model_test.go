@@ -124,3 +124,42 @@ func TestCurrentProjectViewHidesWorkingDirectory(t *testing.T) {
 		t.Fatalf("current-project view unexpectedly shows working directory: %q", view)
 	}
 }
+
+func TestFormatSize(t *testing.T) {
+	tests := []struct {
+		n    int64
+		want string
+	}{
+		{0, "-"},
+		{512, "512B"},
+		{1536, "1.5K"},
+		{3 * 1024 * 1024, "3.0M"},
+		{2 * 1024 * 1024 * 1024, "2.0G"},
+	}
+	for _, tt := range tests {
+		if got := formatSize(tt.n); got != tt.want {
+			t.Errorf("formatSize(%d) = %q; want %q", tt.n, got, tt.want)
+		}
+	}
+}
+
+func TestSizeThresholds(t *testing.T) {
+	const mb = 1024 * 1024
+	tests := []struct {
+		n           int64
+		warn, large bool
+	}{
+		{3*mb - 1, false, false},
+		{3 * mb, true, false},
+		{10*mb - 1, true, false},
+		{10 * mb, false, true},
+	}
+	for _, tt := range tests {
+		if got := isWarnSize(tt.n); got != tt.warn {
+			t.Errorf("isWarnSize(%d) = %v; want %v", tt.n, got, tt.warn)
+		}
+		if got := isLargeSize(tt.n); got != tt.large {
+			t.Errorf("isLargeSize(%d) = %v; want %v", tt.n, got, tt.large)
+		}
+	}
+}

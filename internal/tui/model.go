@@ -42,6 +42,13 @@ var (
 			Foreground(lipgloss.Color("243")).
 			Italic(true)
 
+	warnSizeStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("220"))
+
+	largeSizeStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("196")).
+			Bold(true)
+
 	pathStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("244"))
 
@@ -64,6 +71,46 @@ var agentLabels = map[session.Agent]string{
 }
 
 const agentColumnWidth = len("[opencode]")
+
+const sizeColumnWidth = len("999.9M")
+
+// Size thresholds. Roughly 1MB of transcript corresponds to one full context
+// window (one compaction). warnSizeThreshold marks histories that have been
+// compacted a few times and are worth handing off to a new session (yellow);
+// largeSizeThreshold marks histories that are clearly past that point and slow
+// to resume (red).
+const (
+	warnSizeThreshold  int64 = 3 * 1024 * 1024
+	largeSizeThreshold int64 = 10 * 1024 * 1024
+)
+
+func isWarnSize(n int64) bool  { return n >= warnSizeThreshold && n < largeSizeThreshold }
+func isLargeSize(n int64) bool { return n >= largeSizeThreshold }
+
+// formatSize renders a byte count compactly (e.g. "512B", "45.2K", "1.3M").
+// Zero (unknown) renders as "-".
+func formatSize(n int64) string {
+	switch {
+	case n <= 0:
+		return "-"
+	case n < 1024:
+		return fmt.Sprintf("%dB", n)
+	case n < 1024*1024:
+		return fmt.Sprintf("%.1fK", float64(n)/1024)
+	case n < 1024*1024*1024:
+		return fmt.Sprintf("%.1fM", float64(n)/(1024*1024))
+	default:
+		return fmt.Sprintf("%.1fG", float64(n)/(1024*1024*1024))
+	}
+}
+
+func padLeft(s string, width int) string {
+	padding := width - ansi.StringWidth(s)
+	if padding <= 0 {
+		return s
+	}
+	return strings.Repeat(" ", padding) + s
+}
 
 func padRight(s string, width int) string {
 	padding := width - ansi.StringWidth(s)
@@ -189,6 +236,14 @@ func (m Model) View() string {
 
 		agentText := padRight(fmt.Sprintf("[%s]", label), agentColumnWidth)
 		agentLabel := agentStyle.Render(agentText)
+		sizeText := padLeft(formatSize(s.Size), sizeColumnWidth)
+		sizeLabel := timeStyle.Render(sizeText)
+		switch {
+		case isLargeSize(s.Size):
+			sizeLabel = largeSizeStyle.Render(sizeText)
+		case isWarnSize(s.Size):
+			sizeLabel = warnSizeStyle.Render(sizeText)
+		}
 		title := s.Title
 
 		timeLabel := timeStyle.Render(dateStr)
@@ -212,7 +267,7 @@ func (m Model) View() string {
 			plainProjectLabel = "  [" + project + "]"
 		}
 
-		line := fmt.Sprintf("%s  %s%s  %s%s", timeLabel, agentLabel, projectLabel, title, modelLabel)
+		line := fmt.Sprintf("%s  %s  %s%s  %s%s", timeLabel, agentLabel, sizeLabel, projectLabel, title, modelLabel)
 		available := viewWidth - 3
 		if available < 1 {
 			available = 1
@@ -222,7 +277,7 @@ func (m Model) View() string {
 			if s.Model != "" {
 				plainModelLabel = " " + s.Model
 			}
-			plainLine := fmt.Sprintf("%s  %s%s  %s%s", dateStr, agentText, plainProjectLabel, title, plainModelLabel)
+			plainLine := fmt.Sprintf("%s  %s  %s%s  %s%s", dateStr, agentText, sizeText, plainProjectLabel, title, plainModelLabel)
 			rowWidth := viewWidth - 1
 			if rowWidth < 1 {
 				rowWidth = 1
