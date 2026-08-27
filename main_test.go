@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"agres/internal/session"
 )
@@ -201,5 +202,27 @@ func TestResumeCommandRejectsMissingWorkingDirectory(t *testing.T) {
 	selected.WorkDir = filePath
 	if _, err := resumeCommand(selected); err == nil {
 		t.Fatal("resumeCommand() succeeded with a file as working directory")
+	}
+}
+
+func TestParseCleanArgs(t *testing.T) {
+	opts, err := parseCleanArgs([]string{"-a", "--older-than", "7d", "--larger-than=10M", "--keep", "0", "--agent", "codex", "-y", "--dry-run"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !opts.allProjects || !opts.yes || !opts.dryRun || opts.Keep != 0 || opts.Agent != "codex" ||
+		opts.OlderThan != 7*24*time.Hour || opts.LargerThan != 10<<20 {
+		t.Errorf("unexpected options: %+v", opts)
+	}
+
+	defaults, err := parseCleanArgs(nil)
+	if err != nil || defaults.OlderThan != 30*24*time.Hour || defaults.Keep != 3 || defaults.ActiveWindow != time.Hour {
+		t.Errorf("unexpected defaults: %+v (%v)", defaults, err)
+	}
+
+	for _, bad := range [][]string{{"--older-than"}, {"--agent", "aider"}, {"--keep", "-1"}, {"--bogus"}} {
+		if _, err := parseCleanArgs(bad); err == nil {
+			t.Errorf("expected error for %v", bad)
+		}
 	}
 }

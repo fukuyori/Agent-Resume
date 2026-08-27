@@ -23,6 +23,9 @@ type Session struct {
 	Model     string
 	Size      int64 // stored history size in bytes (0 if unknown)
 	ResumeCmd []string
+	// Paths lists the files/directories that hold this session's history.
+	// Used by Cleaner implementations that delete on the filesystem.
+	Paths []string
 }
 
 type Detector interface {
@@ -30,4 +33,11 @@ type Detector interface {
 	Icon() string
 	Detect(cwd string) bool
 	ListSessions(cwd string, allProjects bool) ([]Session, error)
+}
+
+// Cleaner is implemented by detectors whose sessions can be deleted
+// individually.
+type Cleaner interface {
+	Detector
+	Delete(s Session) error
 }

@@ -38,6 +38,10 @@ func (d *AntigravityDetector) cacheFile() string {
 	return filepath.Join(d.baseDir(), "cache", "last_conversations.json")
 }
 
+func (d *AntigravityDetector) Delete(s session.Session) error {
+	return removePaths(s.Paths)
+}
+
 func (d *AntigravityDetector) Detect(cwd string) bool {
 	cache := d.cacheFile()
 	f, err := os.Open(cache)
@@ -188,6 +192,10 @@ func (d *AntigravityDetector) parseTranscript(path, uuid string, base *session.S
 	dbPath := filepath.Join(d.baseDir(), "conversations", uuid+".db")
 	if info, err := os.Stat(dbPath); err == nil {
 		modTime = info.ModTime()
+		s.Paths = append(s.Paths, dbPath)
+	}
+	if info, err := os.Stat(filepath.Join(d.brainDir(), uuid)); err == nil && info.IsDir() {
+		s.Paths = append(s.Paths, filepath.Join(d.brainDir(), uuid))
 	}
 	if info, err := os.Stat(path); err == nil {
 		s.Size = info.Size()

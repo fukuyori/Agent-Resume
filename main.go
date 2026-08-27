@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"os/exec"
@@ -8,13 +9,15 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"agres/internal/agent"
+	"agres/internal/clean"
 	"agres/internal/session"
 	"agres/internal/tui"
 )
 
-var version = "0.5.0"
+var version = "0.5.1"
 
 type cliOptions struct {
 	limit       int
@@ -78,6 +81,7 @@ func printHelp() {
 	fmt.Println()
 	fmt.Println("Usage:")
 	fmt.Println("  agres [options] [count]")
+	fmt.Println("  agres clean [clean options]")
 	fmt.Println()
 	fmt.Println("Options:")
 	fmt.Println("  -a, --all                 Show sessions from all projects")
@@ -85,15 +89,191 @@ func printHelp() {
 	fmt.Println("  -v, --version             Show version information")
 	fmt.Println("  -h, --help                Show help message")
 	fmt.Println()
+	fmt.Println("Clean options (agres clean):")
+	fmt.Println("  -a, --all                 Clean sessions from all projects")
+	fmt.Println("  --older-than <dur>        Only sessions updated before <dur> ago (default: 30d; 0 disables)")
+	fmt.Println("  --larger-than <size>      Only sessions whose history is at least <size> (e.g. 10M)")
+	fmt.Println("  --agent <name>            Only sessions of one agent (claude, codex, opencode, agy)")
+	fmt.Println("  --keep <count>            Always keep the newest <count> sessions per project (default: 3)")
+	fmt.Println("  -y, --yes                 Delete without asking")
+	fmt.Println("  --dry-run                 Show what would be deleted and exit")
+	fmt.Println("  Sessions updated within the last hour are never deleted. Aider is not supported.")
+	fmt.Println()
 	fmt.Println("Examples:")
 	fmt.Println("  agres")
 	fmt.Println("  agres --all")
 	fmt.Println("  agres -a --limit 20")
 	fmt.Println("  agres 20")
 	fmt.Println("  agres -n 20")
+	fmt.Println("  agres clean")
+	fmt.Println("  agres clean -a --larger-than 10M --older-than 0")
+}
+
+type cleanOptions struct {
+	clean.Options
+	allProjects bool
+	yes         bool
+	dryRun      bool
+}
+
+func parseCleanArgs(args []string) (cleanOptions, error) {
+	opts := cleanOptions{Options: clean.DefaultOptions()}
+	next := func(i *int, flag string) (string, error) {
+		if *i+1 >= len(args) {
+			return "", fmt.Errorf("flag '%s' requires an argument", flag)
+		}
+		*i++
+		return args[*i], nil
+	}
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		name, inline, hasInline := strings.Cut(arg, "=")
+		value := func() (string, error) {
+			if hasInline {
+				return inline, nil
+			}
+			return next(&i, name)
+		}
+		var err error
+		switch name {
+		case "-a", "--all":
+			opts.allProjects = true
+		case "-y", "--yes":
+			opts.yes = true
+		case "--dry-run":
+			opts.dryRun = true
+		case "--older-than":
+			var v string
+			if v, err = value(); err == nil {
+				opts.OlderThan, err = clean.ParseDuration(v)
+			}
+		case "--larger-than":
+			var v string
+			if v, err = value(); err == nil {
+				opts.LargerThan, err = clean.ParseSize(v)
+			}
+		case "--keep":
+			var v string
+			if v, err = value(); err == nil {
+				opts.Keep, err = strconv.Atoi(v)
+				if err != nil || opts.Keep < 0 {
+					err = fmt.Errorf("invalid keep count '%s'", v)
+				}
+			}
+		case "--agent":
+			var v string
+			if v, err = value(); err == nil {
+				opts.Agent = session.Agent(strings.ToLower(v))
+				switch opts.Agent {
+				case session.AgentClaude, session.AgentCodex, session.AgentOpenCode, session.AgentAntigravity:
+				case "antigravity":
+					opts.Agent = session.AgentAntigravity
+				default:
+					err = fmt.Errorf("unknown agent '%s'", v)
+				}
+			}
+		case "-h", "--help":
+			printHelp()
+			os.Exit(0)
+		default:
+			err = fmt.Errorf("unknown flag '%s'", arg)
+		}
+		if err != nil {
+			return cleanOptions{}, err
+		}
+	}
+	return opts, nil
+}
+
+func runClean(args []string) {
+	opts, err := parseCleanArgs(args)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+	cwd, err := os.Getwd()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+
+	cleaners := []session.Cleaner{
+		&agent.ClaudeDetector{},
+		&agent.OpenCodeDetector{},
+		&agent.CodexDetector{},
+		&agent.AntigravityDetector{},
+	}
+	owner := make(map[string]session.Cleaner)
+	var all []session.Session
+	for _, c := range cleaners {
+		found, _ := c.ListSessions(cwd, opts.allProjects)
+		for _, s := range found {
+			owner[string(s.Agent)+"\x00"+s.ID] = c
+		}
+		all = append(all, found...)
+	}
+
+	targets := clean.Select(all, opts.Options, time.Now())
+	if len(targets) == 0 {
+		fmt.Println("Nothing to clean.")
+		return
+	}
+
+	var total int64
+	for _, s := range targets {
+		total += s.Size
+		project := s.WorkDir
+		if !opts.allProjects {
+			project = ""
+		}
+		fmt.Printf("  %s  %-10s %7s  %s%s\n",
+			s.UpdatedAt.Local().Format("2006-01-02 15:04"),
+			"["+string(s.Agent)+"]",
+			clean.FormatSize(s.Size),
+			projectPrefix(project),
+			s.Title)
+	}
+	fmt.Println()
+	if opts.dryRun {
+		fmt.Printf("%d sessions (%s) would be deleted.\n", len(targets), clean.FormatSize(total))
+		return
+	}
+	if !opts.yes {
+		fmt.Printf("Delete %d sessions (%s)? [y/N] ", len(targets), clean.FormatSize(total))
+		line, _ := bufio.NewReader(os.Stdin).ReadString('\n')
+		if ans := strings.ToLower(strings.TrimSpace(line)); ans != "y" && ans != "yes" {
+			fmt.Println("Aborted.")
+			return
+		}
+	}
+
+	deleted := 0
+	var freed int64
+	for _, s := range targets {
+		c := owner[string(s.Agent)+"\x00"+s.ID]
+		if err := c.Delete(s); err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to delete %s %s: %v\n", s.Agent, s.ID, err)
+			continue
+		}
+		deleted++
+		freed += s.Size
+	}
+	fmt.Printf("Deleted %d sessions (%s).\n", deleted, clean.FormatSize(freed))
+}
+
+func projectPrefix(workDir string) string {
+	if workDir == "" {
+		return ""
+	}
+	return "[" + workDir + "]  "
 }
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "clean" {
+		runClean(os.Args[2:])
+		return
+	}
+
 	opts, err := parseArgs(os.Args[1:])
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)

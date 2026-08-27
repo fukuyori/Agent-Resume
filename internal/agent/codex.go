@@ -49,6 +49,10 @@ func (d *CodexDetector) sessionsDirs() []string {
 	}
 }
 
+func (d *CodexDetector) Delete(s session.Session) error {
+	return removePaths(s.Paths)
+}
+
 func (d *CodexDetector) Detect(cwd string) bool {
 	sessions, err := d.ListSessions(cwd, false)
 	return err == nil && len(sessions) > 0
@@ -148,6 +152,7 @@ func (d *CodexDetector) parseRolloutFile(path string, cwd string, allProjects bo
 		CreatedAt: stat.ModTime(),
 		Size:      stat.Size(),
 		ResumeCmd: []string{"codex", "resume", sessionID},
+		Paths:     []string{path},
 	}
 
 	scanner := bufio.NewScanner(f)
@@ -369,6 +374,7 @@ func (d *CodexDetector) ListSessions(cwd string, allProjects bool) ([]session.Se
 					existing.WorkDir = s.WorkDir
 				}
 				existing.Size += s.Size
+				existing.Paths = append(existing.Paths, s.Paths...)
 				if s.UpdatedAt.After(existing.UpdatedAt) {
 					existing.UpdatedAt = s.UpdatedAt
 				}

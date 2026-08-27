@@ -50,7 +50,7 @@ Aider stores history inside each project instead of a central index. Therefore, 
 Use arrow keys or `j`/`k` to navigate, `Enter` to select, `q` or `Esc` to quit. The selected session is highlighted across the entire row. Each row also shows the size of the stored history (`-` when unknown). Roughly 1MB of history corresponds to one full context window, so sizes of 3MB or more are shown in yellow (compacted several times; consider handing off to a new session) and 10MB or more in red (slow to resume and unlikely to retain early context).
 
 ```
-  agres 0.5.0  [all projects]
+  agres 0.5.1  [all projects]
   /projects/web-app
 
    2026-07-22 06:30:00  [opencode]   45.2K  [web-app]  Fix login bug  opencode
@@ -61,11 +61,44 @@ Use arrow keys or `j`/`k` to navigate, `Enter` to select, `q` or `Esc` to quit. 
   j/k or ↑↓: navigate  enter: select  q/esc: quit
 ```
 
+## Cleaning up old sessions
+
+Only Claude Code deletes old sessions on its own (`cleanupPeriodDays`, 30 days by default); Codex, OpenCode and Antigravity keep every session forever. `agres clean` removes old or oversized sessions across all of them.
+
+```bash
+# Current project: sessions not updated for 30 days, keeping the newest 3
+agres clean
+
+# All projects
+agres clean -a
+
+# Sessions of 10MB or more regardless of age
+agres clean -a --larger-than 10M --older-than 0 --keep 0
+
+# Only Codex, delete without asking (for scheduled runs)
+agres clean -a --agent codex --yes
+
+# Show what would be deleted and exit
+agres clean -a --dry-run
+```
+
+| Option | Default | Meaning |
+|---|---|---|
+| `-a`, `--all` | off | Clean sessions from all projects |
+| `--older-than <dur>` | `30d` | Only sessions last updated before this long ago (`12h`, `2w`, `0` disables) |
+| `--larger-than <size>` | off | Only sessions whose history is at least this big (`512K`, `10M`, `1G`) |
+| `--agent <name>` | all | `claude`, `codex`, `opencode` or `agy` |
+| `--keep <count>` | `3` | Always keep the newest N sessions of each project |
+| `-y`, `--yes` | off | Skip the confirmation prompt |
+| `--dry-run` | off | List candidates only |
+
+Multiple conditions are combined with AND. Sessions updated within the last hour are never deleted, since they may belong to a running agent. Deletion is immediate (no trash); the list is shown and confirmed before anything is removed. Aider is not supported because its whole history lives in a single file per project.
+
 ## Version
 
 ```bash
 agres --version
-# agres 0.5.0
+# agres 0.5.1
 ```
 
 ## License

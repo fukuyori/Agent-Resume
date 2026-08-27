@@ -37,6 +37,33 @@ func (d *OpenCodeDetector) dbPath() string {
 	return filepath.Join(d.dataDir(), "opencode.db")
 }
 
+// Delete removes the session row; message/part rows cascade. The database
+// file is compacted afterwards so the space is actually released.
+func (d *OpenCodeDetector) Delete(s session.Session) error {
+	db, err := sql.Open("sqlite", d.dbPath())
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	if _, err := db.Exec("PRAGMA foreign_keys = ON"); err != nil {
+		return err
+	}
+	for _, table := range []string{"part", "message", "session"} {
+		if _, err := db.Exec("DELETE FROM "+table+" WHERE "+sessionColumn(table)+" = ?", s.ID); err != nil {
+			return err
+		}
+	}
+	_, err = db.Exec("VACUUM")
+	return err
+}
+
+func sessionColumn(table string) string {
+	if table == "session" {
+		return "id"
+	}
+	return "session_id"
+}
+
 func (d *OpenCodeDetector) Detect(cwd string) bool {
 	db, err := sql.Open("sqlite", d.dbPath()+"?mode=ro")
 	if err != nil {

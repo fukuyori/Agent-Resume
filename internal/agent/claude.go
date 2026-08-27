@@ -84,6 +84,10 @@ func (d *ClaudeDetector) findProjectDir(cwd string) string {
 	return ""
 }
 
+func (d *ClaudeDetector) Delete(s session.Session) error {
+	return removePaths(s.Paths)
+}
+
 func (d *ClaudeDetector) Detect(cwd string) bool {
 	dir := d.findProjectDir(cwd)
 	return dir != ""
@@ -166,6 +170,13 @@ func (d *ClaudeDetector) parseSessionFile(path, cwd string, allProjects bool) (*
 		UpdatedAt: modTime,
 		Size:      size,
 		ResumeCmd: []string{"claude", "--resume", sessionID},
+		Paths:     []string{path},
+	}
+	// Tool results and subagent transcripts live in a sibling directory.
+	if sub := strings.TrimSuffix(path, ".jsonl"); sub != path {
+		if info, err := os.Stat(sub); err == nil && info.IsDir() {
+			s.Paths = append(s.Paths, sub)
+		}
 	}
 
 	scanner := bufio.NewScanner(f)
