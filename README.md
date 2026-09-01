@@ -15,16 +15,12 @@ Resume CLI coding agent sessions from the current directory or from all known pr
 ## Install
 
 ```bash
-go install github.com/user/agres@latest
+git clone https://github.com/fukuyori/Agent-Resume.git
+cd Agent-Resume
+go install .
 ```
 
-Or build from source:
-
-```bash
-git clone https://github.com/user/agres.git
-cd agres
-go build -o agres .
-```
+To build without installing, run `go build -o agres .` in the cloned repository.
 
 ## Usage
 
@@ -103,4 +99,4 @@ agres --version
 
 ## License
 
-MIT
+[MIT](LICENSE)

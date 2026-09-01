@@ -15,16 +15,12 @@
 ## インストール
 
 ```bash
-go install github.com/user/agres@latest
+git clone https://github.com/fukuyori/Agent-Resume.git
+cd Agent-Resume
+go install .
 ```
 
-ソースからビルド:
-
-```bash
-git clone https://github.com/user/agres.git
-cd agres
-go build -o agres .
-```
+インストールせずにビルドする場合は、cloneしたリポジトリで `go build -o agres .` を実行します。
 
 ## 使い方
 
@@ -103,4 +99,4 @@ agres --version
 
 ## ライセンス
 
-MIT
+[MIT](LICENSE)
