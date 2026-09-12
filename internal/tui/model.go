@@ -72,6 +72,10 @@ var agentLabels = map[session.Agent]string{
 
 const agentColumnWidth = len("[opencode]")
 
+// Keep enough room for session titles even when a provider stores a long,
+// fully-qualified model identifier.
+const maxModelColumnWidth = 30
+
 const sizeColumnWidth = len("999.9M")
 
 // Size thresholds. Roughly 1MB of transcript corresponds to one full context
@@ -118,6 +122,30 @@ func padRight(s string, width int) string {
 		return s
 	}
 	return s + strings.Repeat(" ", padding)
+}
+
+func formatModel(model string, width int) string {
+	if model == "" || width < 3 {
+		return ""
+	}
+	return "[" + ansi.Truncate(model, width-2, "…") + "]"
+}
+
+func modelColumnWidth(sessions []session.Session) int {
+	width := 0
+	for _, s := range sessions {
+		if s.Model == "" {
+			continue
+		}
+		candidate := ansi.StringWidth(s.Model) + 2
+		if candidate > maxModelColumnWidth {
+			candidate = maxModelColumnWidth
+		}
+		if candidate > width {
+			width = candidate
+		}
+	}
+	return width
 }
 
 type Model struct {
@@ -229,6 +257,7 @@ func (m Model) View() string {
 		b.WriteString("\n")
 	}
 	b.WriteString("\n")
+	modelWidth := modelColumnWidth(m.sessions)
 
 	for i, s := range m.sessions {
 		label := agentLabels[s.Agent]
@@ -248,8 +277,11 @@ func (m Model) View() string {
 
 		timeLabel := timeStyle.Render(dateStr)
 		modelLabel := ""
-		if s.Model != "" {
-			modelLabel = " " + modelStyle.Render(s.Model)
+		plainModelLabel := ""
+		if modelWidth > 0 {
+			modelText := padRight(formatModel(s.Model, modelWidth), modelWidth)
+			modelLabel = "  " + modelStyle.Render(modelText)
+			plainModelLabel = "  " + modelText
 		}
 
 		projectLabel := ""
@@ -267,17 +299,13 @@ func (m Model) View() string {
 			plainProjectLabel = "  [" + project + "]"
 		}
 
-		line := fmt.Sprintf("%s  %s  %s%s  %s%s", timeLabel, agentLabel, sizeLabel, projectLabel, title, modelLabel)
+		line := fmt.Sprintf("%s  %s%s  %s%s  %s", timeLabel, agentLabel, modelLabel, sizeLabel, projectLabel, title)
 		available := viewWidth - 3
 		if available < 1 {
 			available = 1
 		}
 		if i == m.cursor {
-			plainModelLabel := ""
-			if s.Model != "" {
-				plainModelLabel = " " + s.Model
-			}
-			plainLine := fmt.Sprintf("%s  %s  %s%s  %s%s", dateStr, agentText, sizeText, plainProjectLabel, title, plainModelLabel)
+			plainLine := fmt.Sprintf("%s  %s%s  %s%s  %s", dateStr, agentText, plainModelLabel, sizeText, plainProjectLabel, title)
 			rowWidth := viewWidth - 1
 			if rowWidth < 1 {
 				rowWidth = 1

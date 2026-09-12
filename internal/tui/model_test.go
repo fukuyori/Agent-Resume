@@ -95,6 +95,60 @@ func TestProjectColumnIsAlignedAcrossAgents(t *testing.T) {
 	}
 }
 
+func TestModelColumnFollowsAgentAndAlignsTitles(t *testing.T) {
+	sessions := []session.Session{
+		{Agent: session.AgentCodex, Model: "gpt-5", Title: "first title"},
+		{Agent: session.AgentClaude, Model: "claude-sonnet", Title: "second title"},
+		{Agent: session.AgentAider, Title: "third title"},
+	}
+	m := NewModel(sessions, "0.4.0", false)
+	m.width = 120
+
+	plainView := ansi.Strip(m.View())
+	wantTitleColumn := -1
+	for i, tt := range []struct {
+		agent, model, title string
+	}{
+		{"[codex]", "[gpt-5]", "first title"},
+		{"[claude]", "[claude-sonnet]", "second title"},
+		{"[aider]", "", "third title"},
+	} {
+		var row string
+		for _, line := range strings.Split(plainView, "\n") {
+			if strings.Contains(line, tt.title) {
+				row = line
+				break
+			}
+		}
+		if row == "" {
+			t.Fatalf("title %q was not rendered: %q", tt.title, plainView)
+		}
+		agentColumn := strings.Index(row, tt.agent)
+		titleColumn := strings.Index(row, tt.title)
+		if tt.model != "" {
+			modelColumn := strings.Index(row, tt.model)
+			if modelColumn <= agentColumn || titleColumn <= modelColumn {
+				t.Fatalf("row order is not agent, model, title: %q", row)
+			}
+		}
+		if i == 0 {
+			wantTitleColumn = titleColumn
+		} else if titleColumn != wantTitleColumn {
+			t.Fatalf("title %q starts at column %d; want %d: %q", tt.title, titleColumn, wantTitleColumn, row)
+		}
+	}
+}
+
+func TestFormatModelTruncatesInsideBrackets(t *testing.T) {
+	got := formatModel("a-very-long-model-name", 12)
+	if got[0] != '[' || got[len(got)-1] != ']' {
+		t.Fatalf("formatModel() = %q; want brackets", got)
+	}
+	if width := ansi.StringWidth(got); width != 12 {
+		t.Fatalf("formatModel() width = %d; want 12: %q", width, got)
+	}
+}
+
 func TestViewLinesFitTerminalWidth(t *testing.T) {
 	sessions := []session.Session{{
 		Agent:   session.AgentCodex,

@@ -167,13 +167,17 @@ func extractModelName(jsonStr string) string {
 	}
 	var m struct {
 		ID         string `json:"id"`
+		ModelID    string `json:"modelID"`
 		ProviderID string `json:"providerID"`
 	}
 	if err := json.Unmarshal([]byte(jsonStr), &m); err != nil {
 		return ""
 	}
-	if m.ProviderID != "" {
-		return m.ProviderID
+	if m.ModelID != "" {
+		return m.ModelID
 	}
-	return m.ID
+	if m.ID != "" {
+		return m.ID
+	}
+	return m.ProviderID
 }

@@ -5,6 +5,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-09-12
+
 ### Added
 - MIT license file.
 - Version update checklist.
@@ -13,6 +15,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Changed
 - Removed the release archive from the repository; `*.zip` is now ignored.
 - Corrected the installation instructions to use the actual GitHub repository.
+- Displayed the recorded model in an aligned column immediately after the agent name; OpenCode now prefers the concrete model ID over the provider name.
 
 ## [0.5.1] - 2026-08-27
 
@@ -70,7 +73,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 - Initial release: list and resume sessions of Claude Code, OpenCode, Aider, Codex and Antigravity CLI from the current directory with a keyboard-driven TUI.
 
-[Unreleased]: https://github.com/fukuyori/Agent-Resume/compare/2ee2747...HEAD
+[Unreleased]: https://github.com/fukuyori/Agent-Resume/compare/0.5.2...HEAD
+[0.5.2]: https://github.com/fukuyori/Agent-Resume/compare/2ee2747...0.5.2
 [0.5.1]: https://github.com/fukuyori/Agent-Resume/compare/645d1a9...2ee2747
 [0.5.0]: https://github.com/fukuyori/Agent-Resume/compare/35a94ca...645d1a9
 [0.4.0]: https://github.com/fukuyori/Agent-Resume/compare/69d5aac...35a94ca

@@ -6,6 +6,24 @@ import (
 	"testing"
 )
 
+func TestExtractModelNamePrefersModelID(t *testing.T) {
+	tests := []struct {
+		name, value, want string
+	}{
+		{"modelID", `{"modelID":"claude-sonnet","providerID":"anthropic"}`, "claude-sonnet"},
+		{"legacy id", `{"id":"gpt-5","providerID":"openai"}`, "gpt-5"},
+		{"provider fallback", `{"providerID":"openai"}`, "openai"},
+		{"invalid", `{`, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := extractModelName(tt.value); got != tt.want {
+				t.Fatalf("extractModelName(%q) = %q; want %q", tt.value, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestOpenCodeSessionsUseSessionDirectory(t *testing.T) {
 	root := t.TempDir()
 	db, err := sql.Open("sqlite", filepath.Join(root, "opencode.db"))
