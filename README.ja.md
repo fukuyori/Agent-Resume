@@ -14,6 +14,8 @@
 
 ## インストール
 
+Windows、macOS、Linux向けのビルド済みアーカイブは [GitHub Releases](https://github.com/fukuyori/Agent-Resume/releases) からダウンロードできます。
+
 ```bash
 git clone https://github.com/fukuyori/Agent-Resume.git
 cd Agent-Resume
@@ -37,16 +39,25 @@ agres 20
 agres -n 20
 agres --limit 20
 agres --all --limit 20
+
+# カレントプロジェクトのセッション名とメッセージを検索
+agres --search "認証エラー"
+agres -s "認証エラー"
+
+# 全プロジェクトを検索
+agres -a -s "認証エラー" --search-limit 500 --limit 20
 ```
 
 デフォルトでは、カレントディレクトリで最近更新されたセッションを10件表示します。`--all`または`-a`を指定すると、全プロジェクトの履歴を対象にします。全体表示では各履歴の元の作業フォルダも表示し、選択したエージェントをそのフォルダから再開します。
 
 Aiderは中央の索引ではなく各プロジェクト内に履歴を保存します。そのため、全体表示でもAiderについては`agres`を起動したフォルダの履歴だけを含め、ファイルシステム全体は走査しません。
 
+検索は大文字・小文字を区別せず、セッション名、ユーザー発言、エージェント回答を対象にします。メタデータとツール実行結果は対象外です。ディスクアクセスを制限するため、既定では更新日時が新しい100セッションを検索し、その中から `--limit` 件まで表示します。検索対象数は `--search-limit <件数>` で変更でき、`--search-limit 0` で無制限になります。
+
 矢印キーまたは `j`/`k` で選択、`Enter` で確定、`q` または `Esc` で終了。選択中のセッションは行全体の背景色で表示します。各行では、履歴に記録されている場合、エージェント名の直後に使用モデルを表示します。保存されている履歴のサイズも表示します(不明な場合は `-`)。履歴 1MB がおおよそ文脈 1 杯分に相当するため、3MB 以上は黄色(何度か圧縮済み。新しいセッションへの引き継ぎを検討)、10MB 以上は赤(再開が遅く、初期の文脈もほぼ残っていない)で表示します。
 
 ```
-  agres 0.5.2  [all projects]
+  agres 0.6.0  [all projects]
   /projects/web-app
 
    2026-07-22 06:30:00  [opencode]  [model-id]  45.2K  [web-app]  ログインバグ修正  opencode
@@ -94,7 +105,7 @@ agres clean -a --dry-run
 
 ```bash
 agres --version
-# agres 0.5.2
+# agres 0.6.0
 ```
 
 ## ライセンス

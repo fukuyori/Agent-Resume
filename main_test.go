@@ -11,13 +11,15 @@ import (
 
 func TestParseArgs(t *testing.T) {
 	tests := []struct {
-		name        string
-		args        []string
-		wantLimit   int
-		wantAll     bool
-		wantVersion bool
-		wantHelp    bool
-		wantErr     bool
+		name            string
+		args            []string
+		wantLimit       int
+		wantSearchLimit *int
+		wantSearch      string
+		wantAll         bool
+		wantVersion     bool
+		wantHelp        bool
+		wantErr         bool
 	}{
 		{
 			name:        "default limit",
@@ -112,6 +114,32 @@ func TestParseArgs(t *testing.T) {
 			wantErr:     false,
 		},
 		{
+			name:       "search short flag",
+			args:       []string{"-s", "Authentication Error"},
+			wantLimit:  10,
+			wantSearch: "Authentication Error",
+		},
+		{
+			name:       "search inline long flag",
+			args:       []string{"--search=認証エラー", "--search-limit=500", "--limit", "20"},
+			wantLimit:  20,
+			wantSearch: "認証エラー",
+			wantSearchLimit: func() *int {
+				v := 500
+				return &v
+			}(),
+		},
+		{
+			name:       "unlimited search",
+			args:       []string{"--search", "error", "--search-limit", "0"},
+			wantLimit:  10,
+			wantSearch: "error",
+			wantSearchLimit: func() *int {
+				v := 0
+				return &v
+			}(),
+		},
+		{
 			name:    "invalid negative limit",
 			args:    []string{"-5"},
 			wantErr: true,
@@ -136,6 +164,21 @@ func TestParseArgs(t *testing.T) {
 			args:    []string{"-n", "0"},
 			wantErr: true,
 		},
+		{
+			name:    "missing search keyword",
+			args:    []string{"--search"},
+			wantErr: true,
+		},
+		{
+			name:    "empty search keyword",
+			args:    []string{"--search=   "},
+			wantErr: true,
+		},
+		{
+			name:    "negative search limit",
+			args:    []string{"--search", "error", "--search-limit", "-1"},
+			wantErr: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -151,6 +194,16 @@ func TestParseArgs(t *testing.T) {
 			if opts.limit != tt.wantLimit {
 				t.Errorf("parseArgs() limit = %v, want %v", opts.limit, tt.wantLimit)
 			}
+			wantSearchLimit := 100
+			if tt.wantSearchLimit != nil {
+				wantSearchLimit = *tt.wantSearchLimit
+			}
+			if opts.searchLimit != wantSearchLimit {
+				t.Errorf("parseArgs() searchLimit = %v, want %v", opts.searchLimit, wantSearchLimit)
+			}
+			if opts.search != tt.wantSearch {
+				t.Errorf("parseArgs() search = %q, want %q", opts.search, tt.wantSearch)
+			}
 			if opts.allProjects != tt.wantAll {
 				t.Errorf("parseArgs() allProjects = %v, want %v", opts.allProjects, tt.wantAll)
 			}
@@ -161,6 +214,56 @@ func TestParseArgs(t *testing.T) {
 				t.Errorf("parseArgs() showHelp = %v, want %v", opts.showHelp, tt.wantHelp)
 			}
 		})
+	}
+}
+
+type fakeSearcher struct {
+	matches map[string]bool
+	err     error
+}
+
+func (f fakeSearcher) SearchSession(s session.Session, keyword string) (bool, error) {
+	if f.err != nil {
+		return false, f.err
+	}
+	return f.matches[s.ID], nil
+}
+
+func TestFilterSessionsAppliesSearchLimitBeforeResultLimit(t *testing.T) {
+	sessions := []session.Session{
+		{ID: "newest", Agent: session.AgentCodex, Title: "first"},
+		{ID: "second", Agent: session.AgentCodex, Title: "second"},
+		{ID: "older-match", Agent: session.AgentCodex, Title: "third"},
+	}
+	searchers := map[session.Agent]session.Searcher{
+		session.AgentCodex: fakeSearcher{matches: map[string]bool{"older-match": true}},
+	}
+
+	limited, err := filterSessions(sessions, "needle", 2, searchers)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(limited) != 0 {
+		t.Fatalf("limited search returned %#v; want no matches", limited)
+	}
+
+	unlimited, err := filterSessions(sessions, "needle", 0, searchers)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(unlimited) != 1 || unlimited[0].ID != "older-match" {
+		t.Fatalf("unlimited search returned %#v; want older-match", unlimited)
+	}
+}
+
+func TestFilterSessionsMatchesTitlesCaseInsensitively(t *testing.T) {
+	sessions := []session.Session{{ID: "title", Agent: session.AgentCodex, Title: "Authentication Error"}}
+	got, err := filterSessions(sessions, "authentication", 100, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("filterSessions returned %#v; want title match", got)
 	}
 }
 

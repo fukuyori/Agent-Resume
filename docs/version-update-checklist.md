@@ -21,6 +21,8 @@ Use this checklist whenever the application version changes.
 
 ## Release operations
 
+- [ ] Confirm that the numeric release tag (for example, `0.6.0`) matches the `version` value in `main.go`.
+- [ ] Confirm that the release workflow is expected to publish Windows x86_64 ZIP, macOS Universal ZIP, Linux x86_64 tar.gz, and `SHA256SUMS` assets.
 - [ ] Create a commit only when explicitly requested.
 - [ ] Create a tag only when explicitly requested.
 - [ ] Push commits or tags only when explicitly requested.

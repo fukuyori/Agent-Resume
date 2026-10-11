@@ -41,3 +41,9 @@ type Cleaner interface {
 	Detector
 	Delete(s Session) error
 }
+
+// Searcher is implemented by detectors that can search the user and assistant
+// messages stored for a session.
+type Searcher interface {
+	SearchSession(s Session, keyword string) (bool, error)
+}

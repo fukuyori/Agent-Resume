@@ -14,6 +14,8 @@ Resume CLI coding agent sessions from the current directory or from all known pr
 
 ## Install
 
+Prebuilt archives for Windows, macOS and Linux are available from [GitHub Releases](https://github.com/fukuyori/Agent-Resume/releases).
+
 ```bash
 git clone https://github.com/fukuyori/Agent-Resume.git
 cd Agent-Resume
@@ -37,16 +39,25 @@ agres 20
 agres -n 20
 agres --limit 20
 agres --all --limit 20
+
+# Search the current project's session titles and messages
+agres --search "authentication error"
+agres -s "authentication error"
+
+# Search across all projects
+agres -a -s "authentication error" --search-limit 500 --limit 20
 ```
 
 By default, `agres` shows the 10 most recently updated sessions from the current directory. Use `--all` or `-a` to include sessions from all projects. In all-project mode, each entry includes its original working directory, and the selected agent is resumed from that directory.
 
 Aider stores history inside each project instead of a central index. Therefore, all-project mode includes Aider history only from the directory where `agres` was started; it does not scan the entire filesystem.
 
+Search is case-insensitive and covers session titles plus user and assistant messages. Metadata and tool execution output are excluded. To bound disk access, search examines the 100 most recently updated sessions by default and then displays up to `--limit` matches. Use `--search-limit <count>` to change the number examined, or `--search-limit 0` for no search limit.
+
 Use arrow keys or `j`/`k` to navigate, `Enter` to select, `q` or `Esc` to quit. The selected session is highlighted across the entire row. Each row shows the model recorded for the session, when available, immediately after the agent name. It also shows the size of the stored history (`-` when unknown). Roughly 1MB of history corresponds to one full context window, so sizes of 3MB or more are shown in yellow (compacted several times; consider handing off to a new session) and 10MB or more in red (slow to resume and unlikely to retain early context).
 
 ```
-  agres 0.5.2  [all projects]
+  agres 0.6.0  [all projects]
   /projects/web-app
 
    2026-07-22 06:30:00  [opencode]  [model-id]  45.2K  [web-app]  Fix login bug  opencode
@@ -94,7 +105,7 @@ Multiple conditions are combined with AND. Sessions updated within the last hour
 
 ```bash
 agres --version
-# agres 0.5.2
+# agres 0.6.0
 ```
 
 ## License

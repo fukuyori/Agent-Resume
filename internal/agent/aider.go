@@ -47,7 +47,7 @@ func (d *AiderDetector) ListSessions(cwd string, allProjects bool) ([]session.Se
 
 		if strings.HasPrefix(line, "# ") {
 			if current != nil {
-				current.Summary = truncate(strings.TrimSpace(content.String()), 80)
+				current.Summary = strings.TrimSpace(content.String())
 				current.Size = int64(content.Len())
 				sessions = append(sessions, *current)
 				content.Reset()
@@ -67,7 +67,7 @@ func (d *AiderDetector) ListSessions(cwd string, allProjects bool) ([]session.Se
 	}
 
 	if current != nil {
-		current.Summary = truncate(strings.TrimSpace(content.String()), 80)
+		current.Summary = strings.TrimSpace(content.String())
 		current.Size = int64(content.Len())
 		sessions = append(sessions, *current)
 	}

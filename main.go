@@ -17,17 +17,19 @@ import (
 	"agres/internal/tui"
 )
 
-var version = "0.5.2"
+var version = "0.6.0"
 
 type cliOptions struct {
 	limit       int
+	searchLimit int
+	search      string
 	allProjects bool
 	showVersion bool
 	showHelp    bool
 }
 
 func parseArgs(args []string) (cliOptions, error) {
-	opts := cliOptions{limit: 10}
+	opts := cliOptions{limit: 10, searchLimit: 100}
 
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
@@ -40,6 +42,38 @@ func parseArgs(args []string) (cliOptions, error) {
 			return opts, nil
 		case arg == "-a" || arg == "--all":
 			opts.allProjects = true
+		case arg == "-s" || arg == "--search":
+			if i+1 >= len(args) {
+				return cliOptions{}, fmt.Errorf("flag '%s' requires a keyword", arg)
+			}
+			i++
+			opts.search = strings.TrimSpace(args[i])
+			if opts.search == "" {
+				return cliOptions{}, fmt.Errorf("search keyword must not be empty")
+			}
+		case strings.HasPrefix(arg, "-s=") || strings.HasPrefix(arg, "--search="):
+			parts := strings.SplitN(arg, "=", 2)
+			opts.search = strings.TrimSpace(parts[1])
+			if opts.search == "" {
+				return cliOptions{}, fmt.Errorf("search keyword must not be empty")
+			}
+		case arg == "--search-limit":
+			if i+1 >= len(args) {
+				return cliOptions{}, fmt.Errorf("flag '%s' requires an integer argument", arg)
+			}
+			i++
+			val, convErr := strconv.Atoi(args[i])
+			if convErr != nil || val < 0 {
+				return cliOptions{}, fmt.Errorf("invalid search limit '%s': must be a non-negative integer", args[i])
+			}
+			opts.searchLimit = val
+		case strings.HasPrefix(arg, "--search-limit="):
+			parts := strings.SplitN(arg, "=", 2)
+			val, convErr := strconv.Atoi(parts[1])
+			if convErr != nil || val < 0 {
+				return cliOptions{}, fmt.Errorf("invalid search limit '%s': must be a non-negative integer", parts[1])
+			}
+			opts.searchLimit = val
 		case arg == "-n" || arg == "-l" || arg == "--limit" || arg == "-limit" || arg == "--number" || arg == "-number":
 			if i+1 >= len(args) {
 				return cliOptions{}, fmt.Errorf("flag '%s' requires an integer argument", arg)
@@ -86,6 +120,8 @@ func printHelp() {
 	fmt.Println("Options:")
 	fmt.Println("  -a, --all                 Show sessions from all projects")
 	fmt.Println("  -n, -l, --limit <count>   Number of history items to show (default: 10)")
+	fmt.Println("  -s, --search <keyword>    Search session titles and message content")
+	fmt.Println("  --search-limit <count>    Number of recent sessions to search (default: 100; 0: unlimited)")
 	fmt.Println("  -v, --version             Show version information")
 	fmt.Println("  -h, --help                Show help message")
 	fmt.Println()
@@ -103,6 +139,8 @@ func printHelp() {
 	fmt.Println("  agres")
 	fmt.Println("  agres --all")
 	fmt.Println("  agres -a --limit 20")
+	fmt.Println("  agres -s \"authentication error\"")
+	fmt.Println("  agres -a -s \"authentication error\" --search-limit 500 --limit 20")
 	fmt.Println("  agres 20")
 	fmt.Println("  agres -n 20")
 	fmt.Println("  agres clean")
@@ -268,6 +306,33 @@ func projectPrefix(workDir string) string {
 	return "[" + workDir + "]  "
 }
 
+func filterSessions(sessions []session.Session, keyword string, searchLimit int, searchers map[session.Agent]session.Searcher) ([]session.Session, error) {
+	candidates := sessions
+	if searchLimit > 0 && len(candidates) > searchLimit {
+		candidates = candidates[:searchLimit]
+	}
+
+	keywordLower := strings.ToLower(keyword)
+	matches := make([]session.Session, 0, len(candidates))
+	for _, s := range candidates {
+		matched := strings.Contains(strings.ToLower(s.Title), keywordLower)
+		if !matched {
+			searcher := searchers[s.Agent]
+			if searcher != nil {
+				var err error
+				matched, err = searcher.SearchSession(s, keyword)
+				if err != nil {
+					return nil, fmt.Errorf("search %s session %s: %w", s.Agent, s.ID, err)
+				}
+			}
+		}
+		if matched {
+			matches = append(matches, s)
+		}
+	}
+	return matches, nil
+}
+
 func main() {
 	if len(os.Args) > 1 && os.Args[1] == "clean" {
 		runClean(os.Args[2:])
@@ -302,6 +367,12 @@ func main() {
 		&agent.AiderDetector{},
 		&agent.CodexDetector{},
 		&agent.AntigravityDetector{},
+	}
+	searchers := make(map[session.Agent]session.Searcher, len(detectors))
+	for _, d := range detectors {
+		if searcher, ok := d.(session.Searcher); ok {
+			searchers[d.Name()] = searcher
+		}
 	}
 
 	type result struct {
@@ -343,6 +414,18 @@ func main() {
 	sort.Slice(allSessions, func(i, j int) bool {
 		return allSessions[i].UpdatedAt.After(allSessions[j].UpdatedAt)
 	})
+
+	if opts.search != "" {
+		allSessions, err = filterSessions(allSessions, opts.search, opts.searchLimit, searchers)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		if len(allSessions) == 0 {
+			fmt.Printf("No agent sessions matching %q.\n", opts.search)
+			os.Exit(0)
+		}
+	}
 
 	if len(allSessions) > opts.limit {
 		allSessions = allSessions[:opts.limit]

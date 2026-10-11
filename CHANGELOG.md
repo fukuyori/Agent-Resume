@@ -5,6 +5,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-11
+
+### Added
+- `-s` / `--search` content search for session titles and user/assistant messages, with `--search-limit` to bound the number of recent sessions examined.
+- GitHub Actions release workflow that builds Windows x86_64, Linux x86_64 and macOS Universal archives, generates SHA-256 checksums, and publishes them when a version tag is pushed.
+
 ## [0.5.2] - 2026-09-12
 
 ### Added
@@ -73,7 +79,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 - Initial release: list and resume sessions of Claude Code, OpenCode, Aider, Codex and Antigravity CLI from the current directory with a keyboard-driven TUI.
 
-[Unreleased]: https://github.com/fukuyori/Agent-Resume/compare/0.5.2...HEAD
+[Unreleased]: https://github.com/fukuyori/Agent-Resume/compare/0.6.0...HEAD
+[0.6.0]: https://github.com/fukuyori/Agent-Resume/compare/9cd65bc...0.6.0
 [0.5.2]: https://github.com/fukuyori/Agent-Resume/compare/2ee2747...0.5.2
 [0.5.1]: https://github.com/fukuyori/Agent-Resume/compare/645d1a9...2ee2747
 [0.5.0]: https://github.com/fukuyori/Agent-Resume/compare/35a94ca...645d1a9
