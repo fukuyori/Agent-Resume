@@ -20,6 +20,12 @@ func TestNormalizePath(t *testing.T) {
 
 	for _, tt := range tests {
 		got := normalizePath(tt.input)
+		if tt.input == "" {
+			if got != tt.expected {
+				t.Errorf("normalizePath(%q) = %q; want %q", tt.input, got, tt.expected)
+			}
+			continue
+		}
 		if runtime.GOOS == "windows" {
 			if got != tt.expected {
 				t.Errorf("normalizePath(%q) = %q; want %q", tt.input, got, tt.expected)
@@ -40,6 +46,22 @@ func TestClaudeProjectDir(t *testing.T) {
 	slug := d.projectSlug(cwd)
 	if strings.Contains(slug, "\\") || strings.Contains(slug, ":") {
 		t.Errorf("projectSlug(%q) contains invalid chars: %q", cwd, slug)
+	}
+}
+
+func TestClaudeProjectSlugCrossPlatform(t *testing.T) {
+	tests := []struct {
+		path string
+		want string
+	}{
+		{`C:\Users\test\project`, "C--Users-test-project"},
+		{"/home/test/project", "-home-test-project"},
+	}
+
+	for _, tt := range tests {
+		if got := claudeProjectSlug(tt.path); got != tt.want {
+			t.Errorf("claudeProjectSlug(%q) = %q; want %q", tt.path, got, tt.want)
+		}
 	}
 }
 

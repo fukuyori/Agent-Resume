@@ -11,6 +11,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `-s` / `--search` content search for session titles and user/assistant messages, with `--search-limit` to bound the number of recent sessions examined.
 - GitHub Actions release workflow that builds Windows x86_64, Linux x86_64 and macOS Universal archives, generates SHA-256 checksums, and publishes them when a version tag is pushed.
 
+### Fixed
+- Cross-platform Claude project slug generation for session paths containing separators from another operating system.
+
 ## [0.5.2] - 2026-09-12
 
 ### Added

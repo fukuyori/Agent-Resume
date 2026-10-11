@@ -31,7 +31,15 @@ func (d *ClaudeDetector) projectSlug(cwd string) string {
 	if err != nil {
 		return ""
 	}
-	slashed := filepath.ToSlash(abs)
+	return claudeProjectSlug(abs)
+}
+
+func claudeProjectSlug(path string) string {
+	slashed := filepath.ToSlash(path)
+	// filepath.ToSlash only converts separators for the current OS. Session
+	// metadata can contain paths written on another OS, so normalize Windows
+	// separators explicitly as well.
+	slashed = strings.ReplaceAll(slashed, `\`, "/")
 	slug := strings.ReplaceAll(slashed, "/", "-")
 	slug = strings.ReplaceAll(slug, ":", "-")
 	return slug
