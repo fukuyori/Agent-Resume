@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"unicode/utf8"
 )
@@ -118,5 +119,36 @@ func TestClaudeAllProjectsScansProjectDirectories(t *testing.T) {
 	}
 	if len(sessions) != 1 || sessions[0].WorkDir != cwd {
 		t.Fatalf("all-project Claude sessions = %#v; want session from %q", sessions, cwd)
+	}
+}
+
+func TestClaudeFindProjectDirWithNonASCIIPath(t *testing.T) {
+	projectsDir := t.TempDir()
+	cwd := filepath.Join(t.TempDir(), "my_blog", "現代プログラミング言語の系譜")
+	if err := os.MkdirAll(cwd, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Claude Code replaces each non-alphanumeric rune with a single '-'.
+	abs, err := filepath.Abs(cwd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var want strings.Builder
+	for _, r := range abs {
+		if ('a' <= r && r <= 'z') || ('A' <= r && r <= 'Z') || ('0' <= r && r <= '9') {
+			want.WriteRune(r)
+		} else {
+			want.WriteByte('-')
+		}
+	}
+	projectDir := filepath.Join(projectsDir, want.String())
+	if err := os.Mkdir(projectDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	d := &ClaudeDetector{dir: projectsDir}
+	if got := d.findProjectDir(cwd); got != projectDir {
+		t.Fatalf("findProjectDir(%q) = %q; want %q", cwd, got, projectDir)
 	}
 }

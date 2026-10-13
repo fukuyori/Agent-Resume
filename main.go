@@ -17,7 +17,7 @@ import (
 	"agres/internal/tui"
 )
 
-var version = "0.6.0"
+var version = "0.6.1"
 
 type cliOptions struct {
 	limit       int

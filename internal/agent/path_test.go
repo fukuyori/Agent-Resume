@@ -56,6 +56,8 @@ func TestClaudeProjectSlugCrossPlatform(t *testing.T) {
 	}{
 		{`C:\Users\test\project`, "C--Users-test-project"},
 		{"/home/test/project", "-home-test-project"},
+		{`C:\Users\n_fuk\My Project.v2`, "C--Users-n-fuk-My-Project-v2"},
+		{`C:\Users\test\Blog\現代プログラミング言語の系譜`, "C--Users-test-Blog---------------"},
 	}
 
 	for _, tt := range tests {

@@ -57,7 +57,7 @@ Search is case-insensitive and covers session titles plus user and assistant mes
 Use arrow keys or `j`/`k` to navigate, `Enter` to select, `q` or `Esc` to quit. The selected session is highlighted across the entire row. Each row shows the model recorded for the session, when available, immediately after the agent name. It also shows the size of the stored history (`-` when unknown). Roughly 1MB of history corresponds to one full context window, so sizes of 3MB or more are shown in yellow (compacted several times; consider handing off to a new session) and 10MB or more in red (slow to resume and unlikely to retain early context).
 
 ```
-  agres 0.6.0  [all projects]
+  agres 0.6.1  [all projects]
   /projects/web-app
 
    2026-07-22 06:30:00  [opencode]  [model-id]  45.2K  [web-app]  Fix login bug  opencode
@@ -105,7 +105,7 @@ Multiple conditions are combined with AND. Sessions updated within the last hour
 
 ```bash
 agres --version
-# agres 0.6.0
+# agres 0.6.1
 ```
 
 ## License

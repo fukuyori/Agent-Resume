@@ -34,15 +34,19 @@ func (d *ClaudeDetector) projectSlug(cwd string) string {
 	return claudeProjectSlug(abs)
 }
 
+// claudeProjectSlug mirrors how Claude Code names project directories: every
+// rune other than an ASCII letter or digit (separators, ':', '_', spaces,
+// non-ASCII characters, ...) becomes a single '-'.
 func claudeProjectSlug(path string) string {
-	slashed := filepath.ToSlash(path)
-	// filepath.ToSlash only converts separators for the current OS. Session
-	// metadata can contain paths written on another OS, so normalize Windows
-	// separators explicitly as well.
-	slashed = strings.ReplaceAll(slashed, `\`, "/")
-	slug := strings.ReplaceAll(slashed, "/", "-")
-	slug = strings.ReplaceAll(slug, ":", "-")
-	return slug
+	var b strings.Builder
+	for _, r := range path {
+		if ('a' <= r && r <= 'z') || ('A' <= r && r <= 'Z') || ('0' <= r && r <= '9') {
+			b.WriteRune(r)
+		} else {
+			b.WriteByte('-')
+		}
+	}
+	return b.String()
 }
 
 func (d *ClaudeDetector) projectsDir() string {
@@ -61,6 +65,7 @@ func (d *ClaudeDetector) findProjectDir(cwd string) string {
 
 	// Candidate slugs
 	candidateSlugs := []string{
+		claudeProjectSlug(abs),
 		strings.ReplaceAll(strings.ReplaceAll(slashed, "/", "-"), ":", "-"),
 		strings.ReplaceAll(strings.ReplaceAll(abs, "\\", "-"), ":", "-"),
 		strings.ReplaceAll(slashed, "/", "-"),
