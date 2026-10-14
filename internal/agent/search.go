@@ -52,7 +52,7 @@ func searchableContentMatchesWith(raw json.RawMessage, keyword string, normalize
 }
 
 func scanJSONLines(path string, match func([]byte) bool) (bool, error) {
-	f, err := os.Open(path)
+	f, err := openJSONL(path)
 	if err != nil {
 		return false, err
 	}
@@ -104,7 +104,7 @@ func (d *ClaudeDetector) SearchSession(s session.Session, keyword string) (bool,
 func (d *CodexDetector) SearchSession(s session.Session, keyword string) (bool, error) {
 	foundRollout := false
 	for _, path := range s.Paths {
-		if filepath.Ext(path) != ".jsonl" {
+		if !isJSONLFile(filepath.Base(path)) {
 			continue
 		}
 		foundRollout = true

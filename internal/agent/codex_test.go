@@ -1,10 +1,14 @@
 package agent
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
+
+	"github.com/klauspost/compress/zstd"
 )
 
 func TestExtractSessionIDFromFilename(t *testing.T) {
@@ -19,6 +23,10 @@ func TestExtractSessionIDFromFilename(t *testing.T) {
 		{
 			filename: "rollout-2026-03-26T16-21-10-019d2904-c0b9-7a92-96b8-a238db277d3f.jsonl",
 			expected: "019d2904-c0b9-7a92-96b8-a238db277d3f",
+		},
+		{
+			filename: "rollout-2026-09-04T11-57-08-01a06a59-3eba-7913-8f3b-c0d56c7ec3a6.jsonl.zst",
+			expected: "01a06a59-3eba-7913-8f3b-c0d56c7ec3a6",
 		},
 		{
 			filename: "custom_session.jsonl",
@@ -156,5 +164,103 @@ func TestCodexForkedRolloutKeepsOwnID(t *testing.T) {
 	}
 	if len(s.ResumeCmd) != 3 || s.ResumeCmd[2] != s.ID {
 		t.Errorf("ResumeCmd = %v; want resume of %s", s.ResumeCmd, s.ID)
+	}
+}
+
+func TestCodexListsAndSearchesZstdRollouts(t *testing.T) {
+	root := t.TempDir()
+	cwd := filepath.Join(root, "project")
+	if err := os.Mkdir(cwd, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	dayDir := filepath.Join(root, "sessions", "2026", "09", "04")
+	if err := os.MkdirAll(dayDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	content := `{"timestamp":"2026-09-04T02:57:08Z","type":"session_meta","payload":{"id":"01a06a59-3eba-7913-8f3b-c0d56c7ec3a6","cwd":` + strconv.Quote(cwd) + `}}
+{"timestamp":"2026-09-04T02:57:10Z","type":"event_msg","payload":{"type":"user_message","message":"ボタン押下アニメーションを追加"}}
+`
+	var buf bytes.Buffer
+	enc, err := zstd.NewWriter(&buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := enc.Write([]byte(content)); err != nil {
+		t.Fatal(err)
+	}
+	if err := enc.Close(); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dayDir, "rollout-2026-09-04T11-57-08-01a06a59-3eba-7913-8f3b-c0d56c7ec3a6.jsonl.zst")
+	if err := os.WriteFile(path, buf.Bytes(), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	d := &CodexDetector{dir: root}
+	sessions, err := d.ListSessions(cwd, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sessions) != 1 {
+		t.Fatalf("ListSessions returned %d sessions; want 1", len(sessions))
+	}
+	s := sessions[0]
+	if s.ID != "01a06a59-3eba-7913-8f3b-c0d56c7ec3a6" {
+		t.Errorf("ID = %q", s.ID)
+	}
+	if s.Title != "ボタン押下アニメーションを追加" {
+		t.Errorf("Title = %q", s.Title)
+	}
+
+	matched, err := d.SearchSession(s, "アニメーション")
+	if err != nil || !matched {
+		t.Errorf("SearchSession = %v, %v; want true", matched, err)
+	}
+}
+
+func TestCodexTitleSkipsInjectedAgentsInstructions(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "rollout-2026-09-04T11-57-08-01a06a59-3eba-7913-8f3b-c0d56c7ec3a6.jsonl")
+	writeJSONLines(t, path,
+		map[string]any{"type": "session_meta", "payload": map[string]any{"id": "01a06a59-3eba-7913-8f3b-c0d56c7ec3a6", "cwd": "D:/proj"}},
+		map[string]any{"type": "response_item", "payload": map[string]any{"type": "message", "role": "user", "content": []any{map[string]any{"type": "input_text", "text": "# AGENTS.md instructions\n\n<INSTRUCTIONS>\n## Git\n</INSTRUCTIONS>"}}}},
+		map[string]any{"type": "response_item", "payload": map[string]any{"type": "message", "role": "user", "content": []any{map[string]any{"type": "input_text", "text": "add a button animation"}}}},
+	)
+	d := &CodexDetector{}
+	s, err := d.parseRolloutFile(path, "", true)
+	if err != nil || s == nil {
+		t.Fatalf("parseRolloutFile failed: %v", err)
+	}
+	if s.Title != "add a button animation" {
+		t.Errorf("Title = %q; want the first prompt typed by the user", s.Title)
+	}
+}
+
+func TestCodexIndexThreadNameTakesPrecedence(t *testing.T) {
+	root := t.TempDir()
+	cwd := filepath.Join(root, "project")
+	dayDir := filepath.Join(root, "sessions", "2026", "09", "04")
+	if err := os.MkdirAll(dayDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(cwd, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	const id = "01a06a59-3eba-7913-8f3b-c0d56c7ec3a6"
+	writeJSONLines(t, filepath.Join(dayDir, "rollout-2026-09-04T11-57-08-"+id+".jsonl"),
+		map[string]any{"type": "session_meta", "payload": map[string]any{"id": id, "cwd": cwd}},
+		map[string]any{"type": "event_msg", "payload": map[string]any{"type": "user_message", "message": "first prompt"}},
+	)
+	writeJSONLines(t, filepath.Join(root, "session_index.jsonl"),
+		map[string]any{"id": id, "thread_name": "renamed thread", "updated_at": "2026-09-04T02:58:27Z"},
+	)
+
+	d := &CodexDetector{dir: root}
+	sessions, err := d.ListSessions(cwd, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sessions) != 1 || sessions[0].Title != "renamed thread" {
+		t.Fatalf("sessions = %+v; want one session titled from the index", sessions)
 	}
 }

@@ -5,6 +5,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-15
+
+### Added
+- Support for zstd-compressed Codex rollout files (`.jsonl.zst`), which recent Codex versions use for older sessions. They are now listed, searched with `-s`, and removed by `agres clean`. Uses `github.com/klauspost/compress` (BSD-3-Clause).
+
+### Fixed
+- Codex session titles now use the thread name from `session_index.jsonl` when available, matching Codex's own resume picker.
+- Codex session titles no longer show the injected `# AGENTS.md instructions` text instead of the user's first prompt.
+
 ## [0.6.1] - 2026-10-13
 
 ### Fixed
@@ -87,7 +96,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 - Initial release: list and resume sessions of Claude Code, OpenCode, Aider, Codex and Antigravity CLI from the current directory with a keyboard-driven TUI.
 
-[Unreleased]: https://github.com/fukuyori/Agent-Resume/compare/0.6.1...HEAD
+[Unreleased]: https://github.com/fukuyori/Agent-Resume/compare/0.7.0...HEAD
+[0.7.0]: https://github.com/fukuyori/Agent-Resume/compare/0.6.1...0.7.0
 [0.6.1]: https://github.com/fukuyori/Agent-Resume/compare/0.6.0...0.6.1
 [0.6.0]: https://github.com/fukuyori/Agent-Resume/compare/9cd65bc...0.6.0
 [0.5.2]: https://github.com/fukuyori/Agent-Resume/compare/2ee2747...0.5.2

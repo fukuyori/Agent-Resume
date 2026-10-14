@@ -114,7 +114,7 @@ func (d *CodexDetector) readHistoryMap() map[string]historyInfo {
 
 func extractSessionIDFromFilename(path string) string {
 	base := filepath.Base(path)
-	name := strings.TrimSuffix(base, ".jsonl")
+	name := trimJSONLSuffix(base)
 	if strings.HasPrefix(name, "rollout-") {
 		trimmed := strings.TrimPrefix(name, "rollout-")
 		if len(trimmed) > 20 && trimmed[19] == '-' {
@@ -131,17 +131,24 @@ func cleanCodexText(s string) string {
 	return cleanContent(s)
 }
 
+// isCodexInjectedInstructions reports whether a user-role message is the
+// AGENTS.md content Codex injects at the start of a session rather than a
+// prompt typed by the user.
+func isCodexInjectedInstructions(s string) bool {
+	return strings.HasPrefix(strings.TrimSpace(s), "# AGENTS.md instructions")
+}
+
 func (d *CodexDetector) parseRolloutFile(path string, cwd string, allProjects bool) (*session.Session, error) {
-	f, err := os.Open(path)
+	stat, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+
+	f, err := openJSONL(path)
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
-
-	stat, err := f.Stat()
-	if err != nil {
-		return nil, err
-	}
 
 	sessionID := extractSessionIDFromFilename(path)
 
@@ -276,6 +283,9 @@ func (d *CodexDetector) parseRolloutFile(path string, cwd string, allProjects bo
 				if err := json.Unmarshal(raw.Payload, &item); err == nil {
 					if item.Role == "user" {
 						for _, c := range item.Content {
+							if isCodexInjectedInstructions(c.Text) {
+								continue
+							}
 							if clean := cleanCodexText(c.Text); clean != "" {
 								s.Title = truncate(clean, 50)
 								break
@@ -354,7 +364,7 @@ func (d *CodexDetector) ListSessions(cwd string, allProjects bool) ([]session.Se
 		}
 
 		_ = filepath.WalkDir(sDir, func(path string, dEntry os.DirEntry, err error) error {
-			if err != nil || dEntry.IsDir() || !strings.HasSuffix(dEntry.Name(), ".jsonl") {
+			if err != nil || dEntry.IsDir() || !isJSONLFile(dEntry.Name()) {
 				return nil
 			}
 
@@ -383,7 +393,9 @@ func (d *CodexDetector) ListSessions(cwd string, allProjects bool) ([]session.Se
 				}
 			} else {
 				if indexed, ok := indexMap[s.ID]; ok {
-					if s.Title == "" || s.Title == "Untitled session" {
+					// The index holds the thread name Codex shows in its own
+					// resume picker, so it takes precedence over the first prompt.
+					if indexed.Title != "" {
 						s.Title = indexed.Title
 					}
 					if s.UpdatedAt.IsZero() {
